@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Order, Status, User, ProductionStep, SortConfig, Notification, HistoryEntry, CompanySettings, GlobalLogEntry, Ramal, DEPARTMENTS } from './types';
 import ProductionTable from './components/ProductionTable';
 import Login from './components/Login';
@@ -21,6 +21,9 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  
+  // Ref para o container principal de scroll
+  const mainRef = useRef<HTMLDivElement>(null);
   
   // Estado do Modo Noturno
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -121,6 +124,15 @@ const App: React.FC = () => {
         minute: '2-digit' 
     };
     return date.toLocaleString('pt-BR', options).toUpperCase().replace(/\.|,/g, '');
+  };
+
+  // Função Global de Scroll to Top
+  const handleScrollToTop = () => {
+    if (mainRef.current) {
+      mainRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   useEffect(() => {
@@ -351,7 +363,7 @@ const App: React.FC = () => {
     );
 
     if (foundOrder) {
-      // Abre a Ficha Técnica para leitura completa
+      // Abre a Ficha Técnica para leitura completa (e impressão HTML se desejar)
       setShowTechSheetModal(foundOrder);
       showToast(`O.R #${foundOrder.or} carregada!`, 'success');
     } else {
@@ -373,6 +385,16 @@ const App: React.FC = () => {
     }
   };
 
+  // Funcao para filtrar pela data ao clicar no calendário
+  const handleCalendarDateClick = (dateStr: string) => {
+      // Data vem como YYYY-MM-DD
+      const formattedDate = dateStr.split('-').reverse().join('/'); // DD/MM/YYYY
+      setSearchTerm(formattedDate);
+      setActiveTab('OPERACIONAL');
+      setDashboardFilter('TODAS');
+      showToast(`Filtrando por: ${formattedDate}`, 'info');
+  };
+
   const stats = useMemo(() => {
     const active = orders.filter(o => !o.isArchived);
     const today = new Date().toISOString().split('T')[0];
@@ -390,9 +412,10 @@ const App: React.FC = () => {
     let result = orders.filter(o => {
       const term = debouncedSearch.toLowerCase();
       const dateFormatted = o.dataEntrega.split('-').reverse().join('/');
+      // Busca expandida: OR, Cliente, Vendedor, Item, Referencia
       const matchesSearch = 
         o.cliente.toLowerCase().includes(term) || 
-        o.or.includes(term) || 
+        o.or.toLowerCase().includes(term) || 
         o.vendedor.toLowerCase().includes(term) ||
         o.item.toLowerCase().includes(term) ||
         (o.numeroItem && o.numeroItem.toLowerCase().includes(term)) ||
@@ -712,7 +735,7 @@ const App: React.FC = () => {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-auto p-0 md:p-4 pb-20 bg-slate-50/30 dark:bg-slate-900/50 transition-colors duration-300">
+      <main ref={mainRef} className="flex-1 overflow-auto p-0 md:p-4 pb-20 bg-slate-50/30 dark:bg-slate-900/50 transition-colors duration-300">
         <div className="w-full max-w-[1450px] mx-auto space-y-4 p-4 md:p-0">
           
           {/* Dashboard Stats */}
@@ -753,7 +776,7 @@ const App: React.FC = () => {
                 <div className="relative flex-1">
                 <input 
                     type="text" 
-                    placeholder="Busca..." 
+                    placeholder="Buscar O.R, Cliente, Item, Ref ou Vendedor..." 
                     className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-950 rounded-2xl text-[11px] font-bold outline-none border border-transparent focus:border-emerald-500 dark:focus:border-emerald-500 transition-all"
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
@@ -772,35 +795,20 @@ const App: React.FC = () => {
                 Nova O.R
               </button>
             </div>
-            
-            {/* System Legends */}
-            <div className="flex items-center gap-4 px-4 pb-1 opacity-70">
-                <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                    <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ativas</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                    <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Hoje</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                    <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Atrasadas</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600"></div>
-                    <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Concluídas</span>
-                </div>
-            </div>
           </div>
 
           {activeTab === 'CALENDÁRIO' ? (
-             <CalendarView orders={orders} onEditOrder={(o) => { setEditingOrder(o); setShowOrderModal(true); }} />
+             <CalendarView 
+                orders={orders} 
+                onEditOrder={(o) => { setEditingOrder(o); setShowOrderModal(true); }}
+                onDateClick={handleCalendarDateClick}
+             />
           ) : (
              <ProductionTable 
                 orders={filteredOrders} 
                 onUpdateStatus={handleUpdateStatus} 
                 onEditOrder={(o) => { setEditingOrder(o); setShowOrderModal(true); }}
+                onCreateOrder={() => { setEditingOrder(null); setShowOrderModal(true); }}
                 onShowQR={(o) => setShowQRModal(o)}
                 onDeleteOrder={handleDeleteOrder}
                 onReactivateOrder={handleReactivateOrder}
@@ -811,36 +819,48 @@ const App: React.FC = () => {
                 currentUser={currentUser}
                 onSort={(key) => setSortConfig(current => ({ key, direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc' }))}
                 sortConfig={sortConfig}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                onScrollTop={handleScrollToTop}
+                onShowScanner={() => setShowScanner(true)}
              />
           )}
         </div>
       </main>
 
-      {/* Floating QR Scan Button (Mobile Only) - IMPROVED DESIGN */}
-      <button 
-        onClick={() => setShowScanner(true)}
-        className="fixed md:hidden bottom-24 right-5 w-16 h-16 bg-[#064e3b] dark:bg-emerald-600 text-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.3)] flex items-center justify-center z-50 hover:scale-105 active:scale-95 transition-all border border-white/20 backdrop-blur-md"
-        title="Scanner QR"
-      >
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM6 8v4h4V8H6zm14 10.5c0 .276-.224.5-.5.5h-3a.5.5 0 01-.5-.5v-3a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3z" strokeWidth="2"/></svg>
-      </button>
+      {/* NEW FIXED BOTTOM DOCK NAVIGATION (MOBILE ONLY) */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden pb-safe-bottom bg-transparent pointer-events-none">
+         <div className="w-full h-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 shadow-[0_-10px_30px_rgba(0,0,0,0.1)] flex items-center justify-between px-6 pointer-events-auto relative">
+            
+            {/* Left Tab: Produção */}
+            <button 
+                onClick={() => setActiveTab('OPERACIONAL')}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 ${activeTab === 'OPERACIONAL' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}
+            >
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${activeTab === 'OPERACIONAL' ? 'text-emerald-600' : 'text-slate-400'}`}>Produção</span>
+            </button>
 
-      {/* FIXED BOTTOM NAVIGATION */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
-        <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-1.5 rounded-full shadow-2xl border border-slate-200 dark:border-slate-700 flex gap-1 transform hover:scale-105 transition-transform duration-300">
-          <button 
-            onClick={() => setActiveTab('OPERACIONAL')}
-            className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'OPERACIONAL' ? 'bg-[#064e3b] text-white shadow-lg' : 'text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
-          >
-            Produção Ativa
-          </button>
-          <button 
-            onClick={() => setActiveTab('CONCLUÍDAS')}
-            className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'CONCLUÍDAS' ? 'bg-[#064e3b] text-white shadow-lg' : 'text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
-          >
-            Arquivos Finalizados
-          </button>
-        </div>
+            {/* Center Floating QR Button */}
+            <div className="relative -top-6">
+                <button 
+                    onClick={() => setShowScanner(true)}
+                    className="w-16 h-16 bg-[#064e3b] dark:bg-emerald-600 text-white rounded-full shadow-[0_8px_20px_rgba(6,78,59,0.4)] flex items-center justify-center hover:scale-105 active:scale-95 transition-all border-4 border-slate-100 dark:border-slate-950"
+                >
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM6 8v4h4V8H6zm14 10.5c0 .276-.224.5-.5.5h-3a.5.5 0 01-.5-.5v-3a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3z" strokeWidth="2"/></svg>
+                </button>
+            </div>
+
+            {/* Right Tab: Arquivos */}
+            <button 
+                onClick={() => setActiveTab('CONCLUÍDAS')}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 ${activeTab === 'CONCLUÍDAS' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}
+            >
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${activeTab === 'CONCLUÍDAS' ? 'text-emerald-600' : 'text-slate-400'}`}>Arquivos</span>
+            </button>
+
+         </div>
       </div>
 
       {/* MODALS */}
@@ -854,6 +874,7 @@ const App: React.FC = () => {
           onSave={handleSaveOrder}
           currentUser={currentUser}
           companySettings={companySettings}
+          showToast={showToast}
         />
       )}
 

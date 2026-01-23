@@ -1,21 +1,26 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Order, Status, ProductionStep, User, SortConfig, Attachment } from '../types';
 
 interface ProductionTableProps {
   orders: Order[];
   onUpdateStatus: (id: string, field: ProductionStep, next: Status) => void;
   onEditOrder: (order: Order) => void;
+  onCreateOrder?: () => void;
   onShowQR: (order: Order) => void;
   onDeleteOrder: (id: string) => void;
   onReactivateOrder: (id: string) => void;
   onArchiveOrder?: (id: string) => void;
   onShowHistory?: (order: Order) => void;
   onShowTechSheet?: (order: Order) => void;
-  onDirectPrint?: (order: Order) => void; // Nova prop para impressão direta
+  onDirectPrint?: (order: Order) => void;
   currentUser: User;
   onSort: (key: string) => void;
   sortConfig: SortConfig;
+  activeTab?: 'OPERACIONAL' | 'CONCLUÍDAS' | 'CALENDÁRIO';
+  setActiveTab?: (tab: 'OPERACIONAL' | 'CONCLUÍDAS' | 'CALENDÁRIO') => void;
+  onScrollTop?: () => void;
+  onShowScanner?: () => void;
 }
 
 const STEP_LABELS: Record<ProductionStep, string> = {
@@ -27,19 +32,11 @@ const STEP_LABELS: Record<ProductionStep, string> = {
   Geral: 'GERAL'
 };
 
-const STEP_ABBREVIATIONS: Record<ProductionStep, string> = {
-  preImpressao: 'DSG',
-  impressao: 'IMP',
-  producao: 'ACB',
-  instalacao: 'INS',
-  expedicao: 'LOG',
-  Geral: 'GER'
-};
-
 const ProductionTable: React.FC<ProductionTableProps> = ({ 
   orders, 
   onUpdateStatus, 
-  onEditOrder, 
+  onEditOrder,
+  onCreateOrder, 
   onShowQR, 
   onShowHistory,
   onShowTechSheet,
@@ -49,101 +46,28 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
   onArchiveOrder,
   currentUser, 
   onSort, 
-  sortConfig 
+  sortConfig,
+  activeTab,
+  setActiveTab,
+  onScrollTop,
+  onShowScanner
 }) => {
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; orderId: string | null; or: string | null }>({ isOpen: false, orderId: null, or: null });
   const [reactivateModal, setReactivateModal] = useState<{ isOpen: boolean; orderId: string | null; or: string | null }>({ isOpen: false, orderId: null, or: null });
   const [shareModal, setShareModal] = useState<{ isOpen: boolean; order: Order | null }>({ isOpen: false, order: null });
   const [attachmentModal, setAttachmentModal] = useState<{ isOpen: boolean; order: Order | null }>({ isOpen: false, order: null });
   
-  // Start with empty sets to keep everything collapsed initially
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
   const [expandedOrs, setExpandedOrs] = useState<Set<string>>(new Set());
+  
+  // Estado para minimizar/maximizar barra flutuante (inicia expandida)
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
+
+  const toolsContainerRef = useRef<HTMLDivElement>(null);
 
   const stepsList: ProductionStep[] = ['preImpressao', 'impressao', 'producao', 'instalacao', 'expedicao'];
 
-  const handleStepClick = (orderId: string, step: ProductionStep, currentStatus: Status) => {
-    const isOwner = currentUser.role === 'Admin' || currentUser.departamento === 'Geral' || currentUser.departamento === step;
-    
-    if (!isOwner) {
-      alert(`ACESSO RESTRITO AO SETOR ${STEP_LABELS[step]}`);
-      return;
-    }
-    
-    let next: Status;
-    if (currentStatus === 'Em Produção') next = 'Concluído';
-    else if (currentStatus === 'Concluído') next = 'Pendente';
-    else next = 'Em Produção';
-    
-    onUpdateStatus(orderId, step, next);
-  };
-
-  const confirmDelete = () => {
-    if (deleteModal.orderId) {
-      onDeleteOrder(deleteModal.orderId);
-      setDeleteModal({ isOpen: false, orderId: null, or: null });
-    }
-  };
-
-  const confirmReactivate = () => {
-    if (reactivateModal.orderId) {
-      onReactivateOrder(reactivateModal.orderId);
-      setReactivateModal({ isOpen: false, orderId: null, or: null });
-    }
-  };
-
-  const openShareModal = (order: Order) => {
-    setShareModal({ isOpen: true, order });
-  };
-
-  const handleShareAction = (method: 'whatsapp' | 'email' | 'copy') => {
-    const order = shareModal.order;
-    if (!order) return;
-    const subject = `O.R #${order.or} - ${order.cliente}`;
-    const body = `📋 *RESUMO DA ORDEM DE SERVIÇO*\n\n🔹 *O.R:* ${order.or}\n${order.numeroItem ? `🔹 *Item Ref:* ${order.numeroItem}\n` : ''}🏢 *Cliente:* ${order.cliente}\n🛠 *Item:* ${order.item} (Qtd: ${order.quantidade || 1})\n📅 *Entrega:* ${order.dataEntrega.split('-').reverse().join('/')}\n👤 *Vendedor:* ${order.vendedor}\n📌 *Status Atual:* ${order.isArchived ? 'Arquivado/Concluído' : 'Em Andamento'}\n\nAcompanhe o status completo no painel Newcom Control.`.trim();
-    if (method === 'whatsapp') { window.open(`https://wa.me/?text=${encodeURIComponent(body)}`, '_blank'); } 
-    else if (method === 'email') { window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; } 
-    else if (method === 'copy') { navigator.clipboard.writeText(body); alert('Resumo copiado para a área de transferência!'); }
-    setShareModal({ isOpen: false, order: null });
-  };
-
-  const downloadAttachment = (attachment: Attachment) => {
-    const link = document.createElement('a'); link.href = attachment.dataUrl; link.download = attachment.name; document.body.appendChild(link); link.click(); document.body.removeChild(link);
-  };
-
-  const viewAttachment = (attachment: Attachment) => {
-    const win = window.open();
-    if (win) {
-      if (attachment.type?.startsWith('image/')) { win.document.write(`<img src="${attachment.dataUrl}" style="max-width:100%; height:auto;">`); } 
-      else if (attachment.type === 'application/pdf') { win.document.write(`<iframe src="${attachment.dataUrl}" style="width:100%; height:100vh; border:none;"></iframe>`); } 
-      else { win.close(); downloadAttachment(attachment); }
-    }
-  };
-
-  const getWeekNumber = (date: Date) => {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  };
-
-  const getDeliveryStatusColor = (dateStr: string, isArchived: boolean) => {
-    if (isArchived) return 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
-    const todayStr = new Date().toLocaleDateString('en-CA'); 
-    if (dateStr < todayStr) return 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900';
-    if (dateStr === todayStr) return 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-900';
-    return 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
-  };
-
-  const getLastStepUpdate = (order: Order, step: ProductionStep) => {
-    if (!order.history || order.history.length === 0) return null;
-    const stepHistory = order.history
-        .filter(h => h.sector === step)
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    return stepHistory.length > 0 ? stepHistory[0] : null;
-  };
-
+  // Agrupamento de Ordens
   const groupedOrders = useMemo(() => {
     const orGroups: Record<string, Order[]> = {};
     orders.forEach(order => {
@@ -177,6 +101,14 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
         if (dateDiff !== 0) return sortConfig.direction === 'asc' ? dateDiff : -dateDiff;
         return b.or.localeCompare(a.or); 
     });
+
+    const getWeekNumber = (date: Date) => {
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    };
 
     type DayGroup = { dateStr: string; dayName: string; orGroups: typeof unifiedGroups; };
     type WeekGroup = { id: string; title: string; subTitle: string; days: Record<string, DayGroup>; date: Date; isCurrent: boolean; };
@@ -237,6 +169,74 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
     });
   }, [orders, sortConfig]);
 
+  // Efeito para auto-expandir
+  useEffect(() => {
+      const totalOrs = groupedOrders.reduce((acc, w) => acc + w.days.reduce((dAcc, d) => dAcc + d.orGroups.length, 0), 0);
+      if (totalOrs < 10 && totalOrs > 0) {
+          handleExpandAll();
+      }
+  }, [groupedOrders.length]); 
+
+  // --- ACTIONS DE EXPANSÃO ---
+
+  const handleExpandAll = () => {
+      const allWeeks = new Set(groupedOrders.map(w => w.id));
+      const allOrs = new Set<string>();
+      groupedOrders.forEach(w => {
+          w.days.forEach(d => {
+              d.orGroups.forEach(o => allOrs.add(o.or));
+          });
+      });
+      setExpandedWeeks(allWeeks);
+      setExpandedOrs(allOrs);
+  };
+
+  const handleExpandOrderMode = () => {
+      const allWeeks = new Set(groupedOrders.map(w => w.id));
+      setExpandedWeeks(allWeeks);
+      setExpandedOrs(new Set()); // Fecha os itens, deixa apenas as semanas e ORs visíveis
+  };
+
+  const handleExpandCurrentWeek = () => {
+      const current = groupedOrders.find(w => w.isCurrent);
+      if (current) {
+          setExpandedWeeks(new Set([current.id]));
+          const weekOrs = new Set<string>();
+          current.days.forEach(d => d.orGroups.forEach(o => weekOrs.add(o.or)));
+          setExpandedOrs(weekOrs);
+      }
+  };
+
+  const handleExpandCurrentDay = () => {
+      const todayStr = new Date().toLocaleDateString('en-CA');
+      const weeksToOpen = new Set<string>();
+      const orsToOpen = new Set<string>();
+
+      groupedOrders.forEach(w => {
+          let hasToday = false;
+          w.days.forEach(d => {
+              if (d.dateStr === todayStr) {
+                  hasToday = true;
+                  d.orGroups.forEach(o => orsToOpen.add(o.or));
+              }
+          });
+          if (hasToday) weeksToOpen.add(w.id);
+      });
+
+      if (weeksToOpen.size === 0) {
+          alert("Nenhuma ordem encontrada para hoje.");
+          return;
+      }
+
+      setExpandedWeeks(weeksToOpen);
+      setExpandedOrs(orsToOpen);
+  };
+
+  const handleCollapseAll = () => {
+      setExpandedWeeks(new Set());
+      setExpandedOrs(new Set());
+  };
+
   const toggleWeek = (groupId: string) => {
     setExpandedWeeks(prev => {
       const next = new Set(prev);
@@ -253,6 +253,63 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
     });
   };
 
+  const handleStepClick = (orderId: string, step: ProductionStep, currentStatus: Status) => {
+    const isOwner = currentUser.role === 'Admin' || currentUser.departamento === 'Geral' || currentUser.departamento === step;
+    if (!isOwner) { alert(`ACESSO RESTRITO AO SETOR ${STEP_LABELS[step]}`); return; }
+    let next: Status;
+    if (currentStatus === 'Em Produção') next = 'Concluído';
+    else if (currentStatus === 'Concluído') next = 'Pendente';
+    else next = 'Em Produção';
+    onUpdateStatus(orderId, step, next);
+  };
+
+  const confirmDelete = () => {
+    if (deleteModal.orderId) { onDeleteOrder(deleteModal.orderId); setDeleteModal({ isOpen: false, orderId: null, or: null }); }
+  };
+
+  const confirmReactivate = () => {
+    if (reactivateModal.orderId) { onReactivateOrder(reactivateModal.orderId); setReactivateModal({ isOpen: false, orderId: null, or: null }); }
+  };
+
+  const openShareModal = (order: Order) => setShareModal({ isOpen: true, order });
+
+  const handleShareAction = (method: 'whatsapp' | 'email' | 'copy') => {
+    const order = shareModal.order;
+    if (!order) return;
+    const body = `📋 O.R #${order.or} - ${order.cliente}\nItem: ${order.item}\nEntrega: ${order.dataEntrega.split('-').reverse().join('/')}`;
+    if (method === 'whatsapp') window.open(`https://wa.me/?text=${encodeURIComponent(body)}`, '_blank');
+    else if (method === 'email') window.location.href = `mailto:?subject=${encodeURIComponent(`O.R #${order.or}`)}&body=${encodeURIComponent(body)}`;
+    else if (method === 'copy') { navigator.clipboard.writeText(body); alert('Copiado!'); }
+    setShareModal({ isOpen: false, order: null });
+  };
+
+  const downloadAttachment = (attachment: Attachment) => {
+    const link = document.createElement('a'); link.href = attachment.dataUrl; link.download = attachment.name; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  const viewAttachment = (attachment: Attachment) => {
+    const win = window.open();
+    if (win) {
+      if (attachment.type?.startsWith('image/')) win.document.write(`<img src="${attachment.dataUrl}" style="max-width:100%; height:auto;">`);
+      else if (attachment.type === 'application/pdf') win.document.write(`<iframe src="${attachment.dataUrl}" style="width:100%; height:100vh; border:none;"></iframe>`);
+      else { win.close(); downloadAttachment(attachment); }
+    }
+  };
+
+  const getDeliveryStatusColor = (dateStr: string, isArchived: boolean) => {
+    if (isArchived) return 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+    const todayStr = new Date().toLocaleDateString('en-CA'); 
+    if (dateStr < todayStr) return 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900';
+    if (dateStr === todayStr) return 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-900';
+    return 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+  };
+
+  const getLastStepUpdate = (order: Order, step: ProductionStep) => {
+    if (!order.history || order.history.length === 0) return null;
+    const stepHistory = order.history.filter(h => h.sector === step).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return stepHistory.length > 0 ? stepHistory[0] : null;
+  };
+
   const getLastUpdate = (order: Order) => {
     if (!order.history || order.history.length === 0) return null;
     const sorted = [...order.history].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -266,17 +323,161 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
 
   let globalItemIndex = 0;
 
+  const ToolIcon = ({ onClick, icon, title, active = false }: { onClick: () => void, icon: React.ReactNode, title?: string, active?: boolean }) => (
+      <button 
+          onClick={onClick}
+          title={title}
+          className={`
+            w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-sm
+            ${active 
+                ? 'bg-emerald-500 text-white' 
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-emerald-50 dark:hover:bg-slate-700 hover:text-emerald-600'}
+          `}
+      >
+          {icon}
+      </button>
+  );
+
+  const NavButton = ({ onClick, label, active = false }: { onClick: () => void, label: string, active?: boolean }) => (
+      <button 
+          onClick={onClick}
+          className={`
+            flex-1 py-3 px-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all
+            ${active 
+                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
+                : 'bg-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}
+          `}
+      >
+          {label}
+      </button>
+  );
+
   return (
     <>
-      {/* --- MOBILE VIEW: UNIFIED CARD PER ORDER --- */}
-      <div className="md:hidden space-y-4 pb-24 px-1">
+      {/* --- Legends --- */}
+      <div className="flex justify-between items-center px-2 md:px-4 mb-2">
+          <div className="flex items-center gap-3 opacity-70">
+                <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                    <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ativas</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                    <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Hoje</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                    <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Atrasadas</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600"></div>
+                    <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Concluídas</span>
+                </div>
+          </div>
+      </div>
+
+      {/* --- FLOATING CONTROL ISLAND (DESKTOP) --- */}
+      <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-40 transition-all duration-300 hidden md:block w-auto`}>
+          {isToolbarCollapsed ? (
+              <button 
+                  onClick={() => setIsToolbarCollapsed(false)}
+                  className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl px-6 py-3 rounded-full shadow-2xl border border-slate-200 dark:border-slate-800 flex items-center gap-2 hover:scale-105 transition-transform"
+              >
+                  <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-300 tracking-widest">Abrir Menu</span>
+                  <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 15l7-7 7 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+          ) : (
+              <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-3 rounded-[32px] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col gap-3 min-w-[400px] animate-in slide-in-from-bottom-4">
+                  
+                  {/* Top Row: Navigation Tabs + Center QR */}
+                  <div className="flex items-center justify-between gap-4 relative">
+                      {/* Left Tab */}
+                      <NavButton 
+                          onClick={() => setActiveTab?.('OPERACIONAL')} 
+                          label="Produção Ativa" 
+                          active={activeTab === 'OPERACIONAL'} 
+                      />
+                      
+                      {/* Center Floating QR Button */}
+                      <button 
+                          onClick={onShowScanner}
+                          className="w-14 h-14 bg-slate-900 dark:bg-slate-800 text-white border-4 border-white dark:border-slate-900 rounded-full flex items-center justify-center hover:bg-emerald-500 transition-all active:scale-95 shadow-xl absolute left-1/2 -translate-x-1/2 -top-1 z-10"
+                          title="Escanear QR Code"
+                      >
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM6 8v4h4V8H6zm14 10.5c0 .276-.224.5-.5.5h-3a.5.5 0 01-.5-.5v-3a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3z" strokeWidth="2"/></svg>
+                      </button>
+
+                      {/* Right Tab */}
+                      <NavButton 
+                          onClick={() => setActiveTab?.('CONCLUÍDAS')} 
+                          label="Arquivo Morto" 
+                          active={activeTab === 'CONCLUÍDAS'} 
+                      />
+                  </div>
+
+                  {/* Divider */}
+                  <div className="h-px bg-slate-100 dark:bg-slate-800 w-full"></div>
+
+                  {/* Bottom Row: Tools (Icons Only) */}
+                  <div className="flex items-center justify-between gap-2 px-2">
+                      <div className="flex items-center gap-2">
+                          <ToolIcon onClick={handleExpandAll} icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" strokeWidth="2"/></svg>} title="Expandir Tudo" />
+                          <ToolIcon onClick={handleCollapseAll} icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v16h16V4H4z" strokeWidth="2"/><path d="M9 9l6 6m0-6l-6 6" strokeWidth="2"/></svg>} title="Recolher Tudo" />
+                          <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                          <ToolIcon onClick={handleExpandCurrentDay} icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" strokeWidth="2"/></svg>} title="Ordens de Hoje" />
+                          <ToolIcon onClick={handleExpandCurrentWeek} icon={<span className="text-[9px] font-black">SEM</span>} title="Ver Semana" />
+                          <ToolIcon onClick={handleExpandOrderMode} icon={<span className="text-[9px] font-black">ORD</span>} title="Ver Ordens" />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                          <ToolIcon onClick={onScrollTop} icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 10l7-7m0 0l7 7m-7-7v18" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>} title="Topo" />
+                          
+                          {/* Collapse Button */}
+                          <button 
+                              onClick={() => setIsToolbarCollapsed(true)}
+                              className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors"
+                              title="Recolher Menu"
+                          >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </button>
+
+                          <button 
+                              onClick={onCreateOrder}
+                              className="px-5 py-2.5 rounded-full bg-[#064e3b] dark:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap active:scale-95 hover:bg-emerald-800 shadow-md flex items-center gap-2 ml-2"
+                          >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="3"/></svg>
+                              Nova O.R
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          )}
+      </div>
+
+      {/* --- MOBILE FLOATING TOOLS (Compact Pill Above Dock) --- */}
+      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 md:hidden w-auto">
+          <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-2 rounded-full shadow-xl border border-slate-200 dark:border-slate-800 flex items-center gap-3">
+              <ToolIcon onClick={handleExpandAll} icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 13l-7 7-7-7m14-8l-7 7-7-7" strokeWidth="2"/></svg>} title="Expandir" />
+              <ToolIcon onClick={handleExpandCurrentDay} icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" strokeWidth="2"/></svg>} title="Hoje" />
+              <div className="w-px h-6 bg-slate-200 dark:bg-slate-700"></div>
+              <ToolIcon onClick={onScrollTop} icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 10l7-7m0 0l7 7m-7-7v18" strokeWidth="2"/></svg>} title="Topo" />
+              <button 
+                  onClick={onCreateOrder}
+                  className="w-10 h-10 rounded-full bg-[#064e3b] text-white flex items-center justify-center shadow-md active:scale-95"
+              >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5"/></svg>
+              </button>
+          </div>
+      </div>
+
+      {/* --- MOBILE VIEW --- */}
+      <div className="md:hidden space-y-4 pb-44 px-1">
         {groupedOrders.map((weekGroup) => {
           const isWeekExpanded = expandedWeeks.has(weekGroup.id);
           const totalInWeek = weekGroup.days.reduce((acc, d) => acc + d.orGroups.reduce((oAcc, o) => oAcc + o.items.length, 0), 0);
 
           return (
             <div key={weekGroup.id} className="space-y-1">
-                {/* Collapsible Week Header */}
                 <div 
                     onClick={() => toggleWeek(weekGroup.id)}
                     className={`sticky top-0 z-10 flex justify-between items-center py-3 px-4 shadow-sm backdrop-blur-md border-y border-slate-200 dark:border-slate-800 transition-colors cursor-pointer rounded-xl mx-2 ${weekGroup.isCurrent ? 'bg-emerald-50/90 dark:bg-emerald-900/30' : 'bg-slate-100/90 dark:bg-slate-900/90'}`}
@@ -295,12 +496,10 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
                     </span>
                 </div>
 
-                {/* Days Body */}
                 {isWeekExpanded && (
                     <div className="space-y-4 px-2 pt-2">
                         {weekGroup.days.map(dayGroup => (
                             <div key={dayGroup.dateStr} className="space-y-3">
-                                {/* Day Header */}
                                 <div className="flex items-center gap-2 px-1 ml-1">
                                     <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
                                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{dayGroup.dayName}</span>
@@ -310,23 +509,28 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
                                     const firstItem = orGroup.items[0];
                                     const isLate = !firstItem.isArchived && firstItem.dataEntrega < new Date().toLocaleDateString('en-CA');
                                     const isArchived = firstItem.isArchived;
+                                    const isOrExpanded = expandedOrs.has(orGroup.or);
 
                                     return (
                                         <div 
                                             key={orGroup.or}
-                                            onClick={() => onShowTechSheet?.(firstItem)} 
                                             className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden active:scale-[0.98] transition-transform"
                                         >
-                                            {/* O.R. HEADER - UNIFIED */}
-                                            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-start">
+                                            <div 
+                                                className="bg-slate-50 dark:bg-slate-800/50 p-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-start cursor-pointer"
+                                                onClick={() => toggleOr(orGroup.or)}
+                                            >
                                                 <div>
                                                     <div className="flex items-center gap-2">
+                                                        <div className={`transition-transform duration-300 ${isOrExpanded ? 'rotate-0' : '-rotate-90'}`}>
+                                                            <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                                        </div>
                                                         <span className={`text-base font-[950] ${isLate ? 'text-red-600 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
                                                             #{orGroup.or}
                                                         </span>
                                                         {isArchived && <span className="bg-slate-200 text-slate-500 text-[8px] font-black px-1.5 rounded">ARQ</span>}
                                                     </div>
-                                                    <h3 className="text-[10px] font-black uppercase text-slate-800 dark:text-white leading-tight line-clamp-1 mt-0.5">
+                                                    <h3 className="text-[10px] font-black uppercase text-slate-800 dark:text-white leading-tight line-clamp-1 mt-0.5 ml-5">
                                                         {firstItem.cliente}
                                                     </h3>
                                                 </div>
@@ -340,47 +544,46 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
                                                 </div>
                                             </div>
 
-                                            {/* ITEMS LIST INSIDE O.R. */}
-                                            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                                                {orGroup.items.map((item, idx) => (
-                                                    <div key={item.id} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                                                        <div className="flex justify-between items-start mb-2">
-                                                            <div className="flex-1 pr-2">
-                                                                <div className="flex items-center gap-2 mb-1">
-                                                                    <span className="text-[9px] font-black text-slate-300 dark:text-slate-600">#{String(idx + 1).padStart(2, '0')}</span>
-                                                                    {item.numeroItem && (
-                                                                        <span className="text-[8px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 rounded">
-                                                                            REF: {item.numeroItem}
-                                                                        </span>
-                                                                    )}
+                                            {isOrExpanded && (
+                                                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                                                    {orGroup.items.map((item, idx) => (
+                                                        <div key={item.id} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors" onClick={() => onShowTechSheet?.(item)}>
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <div className="flex-1 pr-2">
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <span className="text-[9px] font-black text-slate-300 dark:text-slate-600">#{String(idx + 1).padStart(2, '0')}</span>
+                                                                        {item.numeroItem && (
+                                                                            <span className="text-[8px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 rounded">
+                                                                                REF: {item.numeroItem}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <p className="text-[9px] font-bold text-slate-700 dark:text-slate-300 uppercase leading-snug line-clamp-2">
+                                                                        {item.item}
+                                                                    </p>
                                                                 </div>
-                                                                <p className="text-[9px] font-bold text-slate-700 dark:text-slate-300 uppercase leading-snug line-clamp-2">
-                                                                    {item.item}
-                                                                </p>
+                                                                <div className="shrink-0 text-center bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">
+                                                                    <span className="text-[10px] font-black text-slate-600 dark:text-slate-400">{item.quantidade || 1}</span>
+                                                                    <span className="block text-[6px] font-bold text-slate-400 uppercase">UN</span>
+                                                                </div>
                                                             </div>
-                                                            <div className="shrink-0 text-center bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">
-                                                                <span className="text-[10px] font-black text-slate-600 dark:text-slate-400">{item.quantidade || 1}</span>
-                                                                <span className="block text-[6px] font-bold text-slate-400 uppercase">UN</span>
+                                                            <div className="flex items-center gap-1 w-full bg-slate-100 dark:bg-slate-800 rounded-full p-0.5">
+                                                                {stepsList.map(step => {
+                                                                    const status = item[step];
+                                                                    const isDone = status === 'Concluído';
+                                                                    const isProgress = status === 'Em Produção';
+                                                                    return (
+                                                                        <div key={step} className={`flex-1 h-1 rounded-full ${
+                                                                            isDone ? 'bg-emerald-500' : 
+                                                                            isProgress ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'
+                                                                        }`}></div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
-
-                                                        {/* Compact Status Bar Per Item */}
-                                                        <div className="flex items-center gap-1 w-full bg-slate-100 dark:bg-slate-800 rounded-full p-0.5">
-                                                            {stepsList.map(step => {
-                                                                const status = item[step];
-                                                                const isDone = status === 'Concluído';
-                                                                const isProgress = status === 'Em Produção';
-                                                                return (
-                                                                    <div key={step} className={`flex-1 h-1 rounded-full ${
-                                                                        isDone ? 'bg-emerald-500' : 
-                                                                        isProgress ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'
-                                                                    }`}></div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -394,47 +597,47 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
       </div>
 
       {/* --- DESKTOP VIEW: TABLE --- */}
-      <div className="hidden md:block bg-transparent md:bg-white dark:md:bg-slate-900 rounded-[16px] border-none md:border border-slate-200 dark:border-slate-800 overflow-hidden md:shadow-lg mb-20 transition-colors w-full">
-        {/* ... (Existing Desktop Table Implementation remains mostly same, ensuring no regression) ... */}
+      {/* Removed overflow-hidden from main wrapper to allow sticky header to work relative to window/main scroll */}
+      <div className="hidden md:block bg-transparent md:bg-white dark:md:bg-slate-900 rounded-[16px] border-none md:border border-slate-200 dark:border-slate-800 md:shadow-lg mb-32 transition-colors w-full pb-48">
         <div className="overflow-x-auto custom-scrollbar w-full">
           <table className="w-full text-left border-collapse table-fixed">
-            <thead>
-              <tr className="bg-slate-50/50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800">
-                <th className="w-[4%] px-2 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">QR</th>
-                <th className="w-[3%] px-2 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">#</th>
+            <thead className="sticky top-[68px] z-20 bg-slate-50 dark:bg-slate-800 shadow-sm border-b border-slate-200 dark:border-slate-700">
+              <tr className="border-b border-slate-100 dark:border-slate-800">
+                <th className="w-[4%] px-2 py-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">QR</th>
+                <th className="w-[3%] px-2 py-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">#</th>
                 <th 
-                    className="w-[6%] px-2 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:text-emerald-600 transition-colors"
+                    className="w-[6%] px-2 py-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:text-emerald-600 transition-colors"
                     onClick={() => onSort('or')}
                 >
                     O.R <SortIcon colKey="or"/>
                 </th>
-                <th className="w-[4%] px-2 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">QTD</th>
+                <th className="w-[4%] px-2 py-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">QTD</th>
                 
                 <th 
-                    className="w-[20%] px-2 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:text-emerald-600 transition-colors"
+                    className="w-[20%] px-2 py-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:text-emerald-600 transition-colors"
                     onClick={() => onSort('item')}
                 >
                     DESCRIÇÃO DO ITEM / CLIENTE <SortIcon colKey="item"/>
                 </th>
                 <th 
-                    className="w-[6%] px-2 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center cursor-pointer hover:text-emerald-600 transition-colors"
+                    className="w-[6%] px-2 py-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center cursor-pointer hover:text-emerald-600 transition-colors"
                     onClick={() => onSort('createdAt')}
                 >
                     CRIAÇÃO <SortIcon colKey="createdAt"/>
                 </th>
                 <th 
-                    className="w-[6%] px-2 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center cursor-pointer hover:text-emerald-600 transition-colors"
+                    className="w-[6%] px-2 py-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center cursor-pointer hover:text-emerald-600 transition-colors"
                     onClick={() => onSort('dataEntrega')}
                 >
                     ENTREGA <SortIcon colKey="dataEntrega"/>
                 </th>
                 {stepsList.map(step => (
-                  <th key={step} className="w-[7%] px-1 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase text-center border-l border-slate-50 dark:border-slate-800">{STEP_LABELS[step]}</th>
+                  <th key={step} className="w-[7%] px-1 py-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase text-center border-l border-slate-50 dark:border-slate-800">{STEP_LABELS[step]}</th>
                 ))}
                 
-                <th className="w-[4%] px-2 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase text-center tracking-widest">ITENS</th>
+                <th className="w-[4%] px-2 py-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase text-center tracking-widest">ITENS</th>
                 
-                <th className="w-[12%] px-2 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase text-right pr-6">AÇÕES</th>
+                <th className="w-[12%] px-2 py-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase text-right pr-6">AÇÕES</th>
               </tr>
             </thead>
             <tbody>
@@ -444,7 +647,6 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
 
                 return (
                   <React.Fragment key={weekGroup.id}>
-                    {/* WEEK HEADER */}
                     <tr onClick={() => toggleWeek(weekGroup.id)} className={`cursor-pointer transition-all border-y border-slate-100 dark:border-slate-800 hover:bg-slate-100/80 ${weekGroup.isCurrent ? 'bg-emerald-50/40 dark:bg-emerald-900/20' : 'bg-slate-50/50 dark:bg-slate-900'}`}>
                       <td colSpan={18} className="px-3 py-2.5">
                         <div className="flex items-center gap-3">
@@ -458,7 +660,6 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
                       </td>
                     </tr>
 
-                    {/* DAYS LOOP */}
                     {isWeekExpanded && weekGroup.days.map((dayGroup) => (
                        <React.Fragment key={dayGroup.dateStr}>
                           <tr className="bg-white dark:bg-slate-900 border-b border-slate-50 dark:border-slate-800">
@@ -534,6 +735,7 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
                                           
                                           return (
                                               <tr key={order.id} className="hover:bg-slate-50/30 dark:hover:bg-slate-800/50 transition-all bg-white dark:bg-slate-900 border-b border-slate-50 dark:border-slate-800/50">
+                                                  {/* Table cells... same as before */}
                                                   <td className="w-[4%] px-2 py-2 text-center">
                                                       <button 
                                                           onClick={(e) => { e.stopPropagation(); onShowQR(order); }} 
@@ -674,7 +876,7 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
         </div>
       </div>
       
-      {/* ... (Rest of the component remains unchanged) ... */}
+      {/* ... (Rest of modal logic) ... */}
       {deleteModal.isOpen && (
         <div className="fixed inset-0 z-[700] flex items-center justify-center bg-slate-900/80 backdrop-blur-xl p-4 animate-in zoom-in-95 duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 w-full max-w-sm text-center border-4 border-slate-100 dark:border-slate-800">

@@ -9,6 +9,7 @@ interface OrderModalProps {
   onSave: (data: Partial<Order>[], idsToDelete?: string[]) => void;
   currentUser?: User | null;
   companySettings?: CompanySettings;
+  showToast?: (msg: string, type: 'success' | 'error' | 'info') => void;
 }
 
 // Tipo interno para gerenciar os itens no estado do formulário
@@ -16,7 +17,7 @@ interface OrderItemForm extends Partial<Order> {
   tempId: string; // Identificador temporário para a UI
 }
 
-const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose, onSave, currentUser, companySettings }) => {
+const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose, onSave, currentUser, companySettings, showToast }) => {
   // Estado para dados comuns a todos os itens
   const [commonData, setCommonData] = useState({
     or: order?.or || '',
@@ -27,10 +28,17 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
   });
 
   const [items, setItems] = useState<OrderItemForm[]>([]);
-  const [highlightId, setHighlightId] = useState<string | null>(order?.id || null);
+  // Use activeItemIndex as the primary way to view items (Pagination)
+  const [activeItemIndex, setActiveItemIndex] = useState(0);
   
-  // Estado para o Modal de Confirmação de Exclusão
+  // Estado para o Modal de Confirmação de Exclusão de Item
   const [deleteCandidate, setDeleteCandidate] = useState<{ index: number; item: OrderItemForm } | null>(null);
+  
+  // Estado para o Modal de Confirmação de Exclusão de Anexo
+  const [attachmentToDelete, setAttachmentToDelete] = useState<{ id: string; name: string } | null>(null);
+
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+  const attachmentsContainerRef = useRef<HTMLDivElement>(null);
 
   // Inicialização: Carregar todos os itens da mesma O.R. se estiver editando
   useEffect(() => {
@@ -61,6 +69,10 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
                 prioridade: master.prioridade || 'Média',
                 observacao: master.observacao || ''
             });
+            
+            // Find index of the clicked order to open that specific item
+            const clickedIndex = siblings.findIndex(s => s.id === order.id);
+            if(clickedIndex !== -1) setActiveItemIndex(clickedIndex);
 
         } else {
             // Fallback
@@ -82,7 +94,6 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
   // Rastrear itens excluídos para remoção definitiva
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
 
-  const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null); 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const isAdmin = currentUser?.role === 'Admin';
@@ -119,6 +130,7 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
             });
 
             setItems(loadedItems);
+            setActiveItemIndex(0);
         }
     }
   };
@@ -151,17 +163,34 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
 
   const addItem = () => {
     const suggestedRef = getNextRefSuggestion();
-    setItems([...items, {
-      tempId: Date.now().toString(),
+    const newTempId = Date.now().toString() + Math.random(); // Ensure unique
+    const newItem = {
+      tempId: newTempId,
       numeroItem: suggestedRef,
       quantidade: '1',
       item: '',
       dataEntrega: new Date().toISOString().split('T')[0],
+      createdAt: new Date().toISOString(), // Add creation date immediately
       attachments: []
-    }]);
+    };
+    
+    setItems(prev => [...prev, newItem]);
+    
+    // Switch to the new item immediately
+    setTimeout(() => {
+        setActiveItemIndex(items.length); // items.length is the new index
+        // Auto-focus description of new item
+        const inputEl = document.getElementById('current-item-desc');
+        if(inputEl) inputEl.focus();
+        // Scroll tabs to end
+        if (tabsContainerRef.current) {
+            tabsContainerRef.current.scrollLeft = tabsContainerRef.current.scrollWidth;
+        }
+    }, 50);
   };
 
   const initiateRemoveItem = (index: number) => {
+    // TRIGGER THE CONFIRMATION MODAL
     setDeleteCandidate({ index, item: items[index] });
   };
 
@@ -171,21 +200,28 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
         if (itemToRemove.id) {
             setDeletedIds(prev => [...prev, itemToRemove.id as string]);
         }
-        setItems(items.filter((_, i) => i !== deleteCandidate.index));
+        
+        const newItems = items.filter((_, i) => i !== deleteCandidate.index);
+        setItems(newItems);
+        
+        // Adjust active index if needed
+        if (activeItemIndex >= newItems.length) {
+            setActiveItemIndex(Math.max(0, newItems.length - 1));
+        }
+        
         setDeleteCandidate(null);
     }
   };
 
   // --- LÓGICA DE ANEXOS POR ITEM ---
-  const handleFileClick = (index: number) => {
+  const handleFileClick = () => {
     if (isProcessingFile) return;
-    setActiveItemIndex(index);
     if (fileInputRef.current) fileInputRef.current.click();
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files && files.length > 0 && activeItemIndex !== null) {
+    if (files && files.length > 0) {
       const file = files[0];
       const currentItem = items[activeItemIndex];
       const currentAttachments = currentItem.attachments || [];
@@ -216,31 +252,34 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
         
         updateItem(activeItemIndex, 'attachments', [...currentAttachments, newAttachment]);
         setIsProcessingFile(false);
-        setActiveItemIndex(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
+        // Scroll to end of attachments
+        setTimeout(() => {
+            if (attachmentsContainerRef.current) {
+                attachmentsContainerRef.current.scrollLeft = attachmentsContainerRef.current.scrollWidth;
+            }
+        }, 50);
       };
       reader.onerror = () => {
         alert("Erro ao ler arquivo.");
         setIsProcessingFile(false);
-        setActiveItemIndex(null);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const removeAttachment = (itemIndex: number, attachmentId: string) => {
-    if (window.confirm("Excluir este anexo?")) {
-        const currentItem = items[itemIndex];
-        const newAttachments = (currentItem.attachments || []).filter(a => a.id !== attachmentId);
-        updateItem(itemIndex, 'attachments', newAttachments);
-    }
+  const initiateRemoveAttachment = (attachment: Attachment) => {
+      setAttachmentToDelete({ id: attachment.id, name: attachment.name });
   };
 
-  const handlePrintTechnicalSheet = () => {
-    if (items.length === 0) return;
-    // (Código de impressão mantido igual para brevidade, já que não foi solicitado alteração na lógica de impressão)
-    // ... Implementação existente ...
-    alert("Função de impressão disponível."); 
+  const confirmRemoveAttachment = () => {
+    if (attachmentToDelete) {
+        const currentItem = items[activeItemIndex];
+        const newAttachments = (currentItem.attachments || []).filter(a => a.id !== attachmentToDelete.id);
+        updateItem(activeItemIndex, 'attachments', newAttachments);
+        if (showToast) showToast('Anexo removido com sucesso.', 'info');
+        setAttachmentToDelete(null);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -262,6 +301,7 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
     for (let i = 0; i < items.length; i++) {
         if (!items[i].item) {
             alert(`O item #${i + 1} precisa de uma descrição.`);
+            setActiveItemIndex(i); // Jump to the invalid item
             return;
         }
     }
@@ -294,247 +334,399 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
       onSave([], deletedIds); // Salva com lista vazia e ids deletados -> limpa tudo
   };
 
+  // Helper function for scrolling tabs
+  const scrollTabs = (direction: 'left' | 'right') => {
+      if (tabsContainerRef.current) {
+          const scrollAmount = 200;
+          tabsContainerRef.current.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+      }
+  };
+
+  // Helper function for scrolling attachments
+  const scrollAttachments = (direction: 'left' | 'right') => {
+      if (attachmentsContainerRef.current) {
+          const scrollAmount = 200;
+          attachmentsContainerRef.current.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+      }
+  };
+
+  const activeItem = items[activeItemIndex];
+
   return (
     <>
     <div className="fixed inset-0 z-[600] flex items-center justify-center bg-slate-900/80 backdrop-blur-xl md:p-4 animate-in zoom-in-95 duration-200">
-      <div className="bg-white dark:bg-slate-900 w-full h-full md:h-auto md:max-h-[95vh] md:max-w-5xl md:rounded-[32px] md:shadow-4xl border-none md:border border-white dark:border-slate-800 flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 w-full h-full md:h-auto md:max-h-[95vh] md:max-w-6xl md:rounded-[32px] md:shadow-4xl border-none md:border border-white dark:border-slate-800 flex flex-col md:flex-row overflow-hidden relative">
         
-        {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 z-10">
-            <div>
-                <h4 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none mb-1">
-                    {order ? `Editar O.R ${commonData.or}` : 'Gerenciar Ordem de Serviço'}
-                </h4>
-                <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[3px]">
-                    {items.length > 1 ? `${items.length} Itens Unificados` : 'Item Único'}
-                </p>
-            </div>
-            <button onClick={onClose} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-red-500 transition-colors">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="2.5"/></svg>
-            </button>
+        {/* SIDEBAR (Common Data) - Desktop Only */}
+        <div className="hidden md:flex flex-col w-[300px] bg-slate-50 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 p-6 overflow-y-auto shrink-0">
+             <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none mb-1">
+                {order ? `Editar O.R` : 'Nova O.R'}
+             </h4>
+             <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[3px] mb-6">
+                Dados Globais
+             </p>
+
+             <div className="space-y-4">
+                <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Número O.R</label>
+                    <input 
+                        type="text" 
+                        required
+                        value={commonData.or}
+                        onChange={e => handleOrChange(e.target.value)}
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-900 dark:text-white border-2 border-emerald-500/20 rounded-xl text-sm font-black uppercase focus:ring-2 ring-emerald-500 outline-none text-emerald-700 dark:text-emerald-400"
+                        placeholder="12345"
+                    />
+                </div>
+                <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Cliente / Projeto</label>
+                    <input 
+                        type="text" 
+                        required
+                        value={commonData.cliente}
+                        onChange={e => setCommonData({...commonData, cliente: e.target.value.toUpperCase()})}
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold uppercase focus:ring-2 ring-emerald-500 outline-none"
+                        placeholder="NOME DO CLIENTE"
+                    />
+                </div>
+                <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Vendedor</label>
+                    <input 
+                        type="text" 
+                        required
+                        value={commonData.vendedor}
+                        onChange={e => setCommonData({...commonData, vendedor: e.target.value.toUpperCase()})}
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold uppercase focus:ring-2 ring-emerald-500 outline-none"
+                        placeholder="NOME"
+                    />
+                </div>
+                <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Prioridade</label>
+                    <select 
+                        value={commonData.prioridade}
+                        onChange={e => setCommonData({...commonData, prioridade: e.target.value as any})}
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold uppercase focus:ring-2 ring-emerald-500 outline-none cursor-pointer"
+                    >
+                        <option value="Baixa">Baixa</option>
+                        <option value="Média">Média</option>
+                        <option value="Alta">Alta</option>
+                    </select>
+                </div>
+                <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Observações Gerais</label>
+                    <textarea 
+                        value={commonData.observacao}
+                        onChange={e => setCommonData({...commonData, observacao: e.target.value.toUpperCase()})}
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold uppercase focus:ring-2 ring-emerald-500 outline-none h-24 resize-none"
+                        placeholder="NOTAS GERAIS..."
+                    />
+                </div>
+             </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
-                
-                {/* --- DADOS GERAIS (COMUM A TODOS) --- */}
-                <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
-                    <div className="flex justify-between items-start mb-4">
-                        <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" strokeWidth="2"/></svg>
-                            Dados Gerais da Ordem
-                        </h5>
+        <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-slate-50/50 dark:bg-slate-950/50">
+            {/* Header / Nav Bar - Mobile & Desktop Unified for Items */}
+            <div className="bg-white dark:bg-slate-900 z-10 shrink-0 border-b border-slate-100 dark:border-slate-800">
+                {/* Mobile: Common Data Summary */}
+                <div className="md:hidden p-4 bg-slate-50 dark:bg-slate-800/50">
+                    <div className="flex justify-between items-start mb-2">
+                        <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase leading-none">
+                            {order ? `Editar O.R ${commonData.or}` : 'Nova Ordem'}
+                        </h4>
+                        <button onClick={onClose} className="p-2 -mr-2 text-slate-400">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="2.5"/></svg>
+                        </button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                        <div className="md:col-span-3 space-y-1">
-                            <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Número O.R</label>
-                            <input 
-                                type="text" 
-                                required
-                                value={commonData.or}
-                                onChange={e => handleOrChange(e.target.value)}
-                                className="w-full px-4 py-3 bg-white dark:bg-slate-900 dark:text-white border-2 border-emerald-500/20 rounded-xl text-sm font-black uppercase focus:ring-2 ring-emerald-500 outline-none text-emerald-700 dark:text-emerald-400"
-                                placeholder="12345"
-                            />
-                        </div>
-                        <div className="md:col-span-6 space-y-1">
-                            <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Cliente / Projeto</label>
-                            <input 
-                                type="text" 
-                                required
-                                value={commonData.cliente}
-                                onChange={e => setCommonData({...commonData, cliente: e.target.value.toUpperCase()})}
-                                className="w-full px-4 py-3 bg-white dark:bg-slate-900 dark:text-white border-none rounded-xl text-xs font-bold uppercase focus:ring-2 ring-emerald-500 outline-none"
-                                placeholder="NOME DO CLIENTE"
-                            />
-                        </div>
-                        <div className="md:col-span-3 space-y-1">
-                            <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Prioridade</label>
-                            <select 
-                                value={commonData.prioridade}
-                                onChange={e => setCommonData({...commonData, prioridade: e.target.value as any})}
-                                className="w-full px-4 py-3 bg-white dark:bg-slate-900 dark:text-white border-none rounded-xl text-xs font-bold uppercase focus:ring-2 ring-emerald-500 outline-none cursor-pointer"
-                            >
-                                <option value="Baixa">Baixa</option>
-                                <option value="Média">Média</option>
-                                <option value="Alta">Alta</option>
-                            </select>
-                        </div>
-                        <div className="md:col-span-4 space-y-1">
-                            <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Vendedor</label>
-                            <input 
-                                type="text" 
-                                required
-                                value={commonData.vendedor}
-                                onChange={e => setCommonData({...commonData, vendedor: e.target.value.toUpperCase()})}
-                                className="w-full px-4 py-3 bg-white dark:bg-slate-900 dark:text-white border-none rounded-xl text-xs font-bold uppercase focus:ring-2 ring-emerald-500 outline-none"
-                                placeholder="NOME"
-                            />
-                        </div>
-                        <div className="md:col-span-8 space-y-1">
-                            <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Observações Gerais</label>
-                            <input 
-                                type="text" 
-                                value={commonData.observacao}
-                                onChange={e => setCommonData({...commonData, observacao: e.target.value.toUpperCase()})}
-                                className="w-full px-4 py-3 bg-white dark:bg-slate-900 dark:text-white border-none rounded-xl text-xs font-bold uppercase focus:ring-2 ring-emerald-500 outline-none"
-                                placeholder="NOTAS INTERNAS..."
-                            />
-                        </div>
+                    {/* Simplified Inputs for Mobile Header */}
+                    <div className="grid grid-cols-2 gap-2">
+                        <input 
+                            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-bold uppercase w-full" 
+                            placeholder="Nº O.R"
+                            value={commonData.or}
+                            onChange={e => handleOrChange(e.target.value)}
+                        />
+                        <input 
+                            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-bold uppercase w-full" 
+                            placeholder="CLIENTE"
+                            value={commonData.cliente}
+                            onChange={e => setCommonData({...commonData, cliente: e.target.value.toUpperCase()})}
+                        />
                     </div>
                 </div>
 
-                {/* --- LISTA DE ITENS PARA EDIÇÃO/CRIAÇÃO --- */}
-                <div className="space-y-4">
-                    <div className="flex justify-between items-center px-2">
-                        <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" strokeWidth="2"/></svg>
-                            Itens da Ordem ({items.length})
-                        </h5>
-                        <button 
-                            type="button" 
-                            onClick={addItem}
-                            className="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all flex items-center gap-1"
-                        >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="3"/></svg>
-                            Adicionar Novo Item
-                        </button>
+                {/* --- ITEM NAVIGATION BAR (Redesigned) --- */}
+                <div className="flex items-center bg-slate-100 dark:bg-black/20 shadow-inner px-2 py-3 relative">
+                    {/* Seta Esquerda */}
+                    <button 
+                        type="button" 
+                        onClick={() => scrollTabs('left')}
+                        className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-emerald-500 transition-colors z-10 shrink-0 md:hidden"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeWidth="3"/></svg>
+                    </button>
+
+                    <div 
+                        ref={tabsContainerRef}
+                        className="flex items-center gap-2 overflow-x-auto custom-scrollbar flex-1 px-2 scroll-smooth"
+                    >
+                        {items.map((it, idx) => (
+                            <button 
+                                key={idx}
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); setActiveItemIndex(idx); }}
+                                className={`
+                                    h-10 shrink-0 rounded-xl border font-black text-[10px] flex items-center justify-center transition-all shadow-sm px-4 gap-1.5 whitespace-nowrap min-w-[60px]
+                                    ${activeItemIndex === idx 
+                                        ? 'bg-emerald-500 text-white border-emerald-600 scale-105 shadow-emerald-500/30 ring-2 ring-emerald-500/20' 
+                                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-emerald-500 hover:text-emerald-600'}
+                                `}
+                            >
+                                <span className="text-sm leading-none">{String(idx + 1).padStart(2, '0')}</span>
+                                {it.numeroItem && <span className="opacity-80 font-bold text-[9px] uppercase border-l pl-1.5 border-current leading-none">REF: {it.numeroItem}</span>}
+                            </button>
+                        ))}
                     </div>
 
-                    {items.map((item, idx) => {
-                        const isHighlighted = item.id === highlightId;
-                        return (
-                        <div key={item.tempId} className={`bg-white dark:bg-slate-900 p-4 rounded-2xl border shadow-sm relative group animate-in slide-in-from-bottom-2 duration-300 transition-all
-                            ${isHighlighted 
-                                ? 'border-emerald-500 ring-2 ring-emerald-500/20 z-10' 
-                                : 'border-slate-200 dark:border-slate-700'
-                            }`}>
+                    {/* Seta Direita */}
+                    <button 
+                        type="button" 
+                        onClick={() => scrollTabs('right')}
+                        className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-emerald-500 transition-colors z-10 shrink-0 md:hidden"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeWidth="3"/></svg>
+                    </button>
+
+                    <div className="w-[1px] h-8 bg-slate-300 dark:bg-slate-700 mx-2 shrink-0"></div>
+
+                    <button 
+                        type="button" 
+                        onClick={addItem}
+                        className="h-10 w-12 shrink-0 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300 font-black text-xl flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all active:scale-95 shadow-sm"
+                        title="Adicionar Item"
+                    >
+                        +
+                    </button>
+                </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden relative">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+                    
+                    {/* Mobile Only: Extra Fields (Vendedor, Prio, Obs) */}
+                    <div className="md:hidden space-y-3 bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 mb-6">
+                        <div className="grid grid-cols-2 gap-3">
+                            <input 
+                                className="bg-slate-50 dark:bg-slate-900 border-none rounded-lg px-3 py-2 text-xs font-bold uppercase" 
+                                placeholder="VENDEDOR"
+                                value={commonData.vendedor}
+                                onChange={e => setCommonData({...commonData, vendedor: e.target.value.toUpperCase()})}
+                            />
+                            <select 
+                                className="bg-slate-50 dark:bg-slate-900 border-none rounded-lg px-3 py-2 text-xs font-bold uppercase"
+                                value={commonData.prioridade}
+                                onChange={e => setCommonData({...commonData, prioridade: e.target.value as any})}
+                            >
+                                <option value="Média">Média</option>
+                                <option value="Alta">Alta</option>
+                                <option value="Baixa">Baixa</option>
+                            </select>
+                        </div>
+                        <input 
+                            className="w-full bg-slate-50 dark:bg-slate-900 border-none rounded-lg px-3 py-2 text-xs font-bold uppercase" 
+                            placeholder="OBSERVAÇÕES GERAIS"
+                            value={commonData.observacao}
+                            onChange={e => setCommonData({...commonData, observacao: e.target.value.toUpperCase()})}
+                        />
+                    </div>
+
+                    {/* SINGLE ACTIVE ITEM FORM */}
+                    {activeItem && (
+                        <div className="bg-white dark:bg-slate-900 rounded-[24px] border border-emerald-500/20 shadow-lg relative overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
+                            {/* Item Header */}
+                            <div className="flex justify-between items-center px-6 py-4 bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700">
+                                <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="bg-emerald-500 text-white text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest">
+                                            Item {String(activeItemIndex + 1).padStart(2, '0')}
+                                        </span>
+                                        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                                            Editando Detalhes
+                                        </span>
+                                    </div>
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase bg-slate-100 dark:bg-slate-700/50 px-2 py-0.5 rounded w-fit">
+                                        Abertura: {activeItem.createdAt ? new Date(activeItem.createdAt).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')}
+                                    </span>
+                                </div>
+                                <button 
+                                    type="button" 
+                                    onClick={() => initiateRemoveItem(activeItemIndex)}
+                                    className="p-2 bg-white dark:bg-slate-700 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded-xl transition-all"
+                                    title="Remover Item"
+                                >
+                                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                </button>
+                            </div>
                             
-                            {/* Indicador se é o item selecionado */}
-                            {isHighlighted && (
-                                <span className="absolute -top-3 left-4 bg-emerald-500 text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest shadow-sm">
-                                    Editando Agora
-                                </span>
-                            )}
-                            
-                            <div className="flex flex-col md:flex-row gap-4">
-                                {/* Numeração e Delete */}
-                                <div className="flex md:flex-col justify-between md:justify-start items-center gap-2 md:w-8 shrink-0 md:pt-2">
-                                    <span className={`text-[10px] font-black ${isHighlighted ? 'text-emerald-600' : 'text-slate-300'}`}>#{String(idx + 1).padStart(2, '0')}</span>
-                                    <button 
-                                        type="button" 
-                                        onClick={() => initiateRemoveItem(idx)}
-                                        className="text-slate-300 hover:text-red-500 transition-colors p-1"
-                                        title="Remover Item"
-                                    >
-                                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                                    </button>
+                            <div className="p-6 flex flex-col gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest ml-1">Descrição do Item</label>
+                                    <textarea 
+                                        id="current-item-desc"
+                                        required
+                                        value={activeItem.item || ''}
+                                        onChange={e => updateItem(activeItemIndex, 'item', e.target.value.toUpperCase())}
+                                        className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 dark:text-white border-2 border-transparent focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-900 rounded-2xl text-sm font-bold uppercase outline-none resize-none h-28 transition-all shadow-inner"
+                                        placeholder="DESCRIÇÃO DO SERVIÇO/PRODUTO"
+                                    />
                                 </div>
 
-                                {/* Campos do Item */}
-                                <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-4">
-                                    <div className="md:col-span-2 space-y-1">
-                                        <label className="text-[8px] font-black text-slate-400 uppercase ml-1">Ref. Item</label>
+                                <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Ref. Item</label>
                                         <input 
                                             type="text" 
-                                            value={item.numeroItem || ''}
-                                            onChange={e => updateItem(idx, 'numeroItem', e.target.value.toUpperCase())}
-                                            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 dark:text-white border border-slate-100 dark:border-slate-700 rounded-xl text-xs font-bold uppercase focus:ring-2 ring-emerald-500 outline-none"
-                                            placeholder="OPCIONAL"
+                                            value={activeItem.numeroItem || ''}
+                                            onChange={e => updateItem(activeItemIndex, 'numeroItem', e.target.value.toUpperCase())}
+                                            className="w-full px-4 py-3 bg-amber-50 dark:bg-amber-900/10 dark:text-white border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-black uppercase focus:ring-2 ring-amber-500 outline-none text-amber-800"
+                                            placeholder="REF"
                                         />
                                     </div>
-                                    <div className="md:col-span-3 space-y-1">
-                                        <label className="text-[8px] font-black text-slate-400 uppercase ml-1">Data de Entrega</label>
+                                    <div className="space-y-2">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Entrega</label>
                                         <input 
                                             type="date" 
                                             required
-                                            value={item.dataEntrega}
-                                            disabled={!isAdmin && !!item.id} // Se não é admin e está editando, trava data
-                                            onChange={e => updateItem(idx, 'dataEntrega', e.target.value)}
+                                            value={activeItem.dataEntrega}
+                                            disabled={!isAdmin && !!activeItem.id}
+                                            onChange={e => updateItem(activeItemIndex, 'dataEntrega', e.target.value)}
                                             style={{ colorScheme: 'light' }}
-                                            className={`w-full px-3 py-2 border border-slate-100 dark:border-slate-700 rounded-xl text-xs font-bold uppercase focus:ring-2 ring-emerald-500 outline-none ${!isAdmin && !!item.id ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-50 dark:bg-slate-800 dark:text-white'}`}
+                                            className={`w-full px-4 py-3 border border-slate-100 dark:border-slate-700 rounded-xl text-[10px] font-bold uppercase focus:ring-2 ring-emerald-500 outline-none ${!isAdmin && !!activeItem.id ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-50 dark:bg-slate-800 dark:text-white'}`}
                                         />
                                     </div>
-                                    <div className="md:col-span-7 space-y-1">
-                                        <label className="text-[8px] font-black text-slate-400 uppercase ml-1">Descrição do Item</label>
-                                        <div className="flex gap-2">
-                                            <input 
-                                                type="text" 
-                                                required
-                                                value={item.item || ''}
-                                                onChange={e => updateItem(idx, 'item', e.target.value.toUpperCase())}
-                                                className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800 dark:text-white border border-slate-100 dark:border-slate-700 rounded-xl text-xs font-bold uppercase focus:ring-2 ring-emerald-500 outline-none"
-                                                placeholder="DESCRIÇÃO DO SERVIÇO/PRODUTO"
-                                            />
-                                            <div className="flex flex-col">
-                                                <input 
-                                                    type="text" 
-                                                    value={item.quantidade || '1'}
-                                                    onChange={e => updateItem(idx, 'quantidade', e.target.value)}
-                                                    className="w-16 px-2 py-2 bg-slate-50 dark:bg-slate-800 dark:text-white border border-slate-100 dark:border-slate-700 rounded-xl text-xs font-bold uppercase focus:ring-2 ring-emerald-500 outline-none text-center"
-                                                    placeholder="QTD"
-                                                    title="Quantidade"
-                                                />
-                                            </div>
-                                        </div>
+                                    <div className="space-y-2 w-full md:w-32">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 text-center block">Qtd</label>
+                                        <input 
+                                            type="text" 
+                                            value={activeItem.quantidade || '1'}
+                                            onChange={e => updateItem(activeItemIndex, 'quantidade', e.target.value)}
+                                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 dark:text-white border border-slate-100 dark:border-slate-700 rounded-xl text-lg font-black uppercase focus:ring-2 ring-emerald-500 outline-none text-center"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Anexos do Item */}
+                                <div className="pt-4 border-t border-slate-100 dark:border-slate-700 relative">
+                                    <div className="flex items-center absolute left-0 top-6 z-10 md:hidden">
+                                        <button type="button" onClick={() => scrollAttachments('left')} className="p-2 bg-white/80 dark:bg-slate-800/80 rounded-full shadow-md text-slate-400">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeWidth="3"/></svg>
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center absolute right-0 top-6 z-10 md:hidden">
+                                        <button type="button" onClick={() => scrollAttachments('right')} className="p-2 bg-white/80 dark:bg-slate-800/80 rounded-full shadow-md text-slate-400">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeWidth="3"/></svg>
+                                        </button>
                                     </div>
 
-                                    {/* Anexos do Item */}
-                                    <div className="md:col-span-12 pt-2 border-t border-slate-50 dark:border-slate-800">
-                                        <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                                            <button 
-                                                type="button"
-                                                onClick={() => handleFileClick(idx)}
-                                                disabled={isProcessingFile}
-                                                className="shrink-0 px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-[8px] font-black text-slate-500 dark:text-slate-400 uppercase hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-300 transition-all flex items-center gap-1"
-                                            >
-                                                {isProcessingFile && activeItemIndex === idx ? (
-                                                    <div className="w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-                                                ) : (
-                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5"/></svg>
-                                                )}
-                                                Anexar
-                                            </button>
-                                            
-                                            {item.attachments && item.attachments.map(att => (
-                                                <div key={att.id} className="shrink-0 flex items-center gap-2 px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
-                                                    <span className="text-[9px] font-bold text-slate-600 dark:text-slate-300 uppercase truncate max-w-[100px]" title={att.name}>{att.name}</span>
-                                                    <button type="button" onClick={() => removeAttachment(idx, att.id)} className="text-slate-300 hover:text-red-500"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="2.5"/></svg></button>
-                                                </div>
-                                            ))}
-                                            {(!item.attachments || item.attachments.length === 0) && (
-                                                <span className="text-[8px] text-slate-300 italic px-2">Nenhum anexo</span>
+                                    <div 
+                                        className="flex items-center gap-3 overflow-x-auto pb-2 custom-scrollbar scroll-smooth px-8 md:px-0"
+                                        ref={attachmentsContainerRef}
+                                    >
+                                        <button 
+                                            type="button"
+                                            onClick={handleFileClick}
+                                            disabled={isProcessingFile}
+                                            className="shrink-0 px-4 py-3 bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-300 transition-all flex flex-col items-center justify-center gap-1 min-w-[80px]"
+                                        >
+                                            {isProcessingFile ? (
+                                                <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                                            ) : (
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5"/></svg>
                                             )}
-                                        </div>
+                                            Anexar
+                                        </button>
+                                        
+                                        {activeItem.attachments && activeItem.attachments.map(att => (
+                                            <div key={att.id} className="shrink-0 relative group">
+                                                <div className="px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm flex items-center gap-3 w-[180px] overflow-hidden">
+                                                    <div className="w-8 h-8 shrink-0 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-slate-400">
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" strokeWidth="2"/></svg>
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-[9px] font-bold text-slate-700 dark:text-slate-200 uppercase truncate" title={att.name}>{att.name}</p>
+                                                        <p className="text-[7px] font-bold text-slate-400 uppercase">{(att.size / 1024).toFixed(1)} KB</p>
+                                                    </div>
+                                                </div>
+                                                {/* Overlay Delete Button - Centered */}
+                                                <div className="absolute inset-0 bg-slate-900/60 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => initiateRemoveAttachment(att)} 
+                                                        className="bg-red-500/80 text-white rounded-full p-2.5 shadow-lg transform hover:scale-110 transition-transform backdrop-blur-md"
+                                                        title="Excluir Anexo"
+                                                    >
+                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
+                            
+                            {/* Inner Navigation within Form */}
+                            <div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-3 border-t border-slate-100 dark:border-slate-700 flex justify-between">
+                                <button 
+                                    type="button"
+                                    onClick={() => setActiveItemIndex(Math.max(0, activeItemIndex - 1))}
+                                    disabled={activeItemIndex === 0}
+                                    className="text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:hover:text-slate-400 font-bold text-[10px] uppercase flex items-center gap-1"
+                                >
+                                    ← Anterior
+                                </button>
+                                <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">
+                                    Item {activeItemIndex + 1} de {items.length}
+                                </span>
+                                <button 
+                                    type="button"
+                                    onClick={() => setActiveItemIndex(Math.min(items.length - 1, activeItemIndex + 1))}
+                                    disabled={activeItemIndex === items.length - 1}
+                                    className="text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:hover:text-slate-400 font-bold text-[10px] uppercase flex items-center gap-1"
+                                >
+                                    Próximo →
+                                </button>
+                            </div>
                         </div>
-                        );
-                    })}
+                    )}
+                    
+                    <div className="h-10"></div>
                 </div>
-            </div>
 
-            {/* Footer */}
-            <div className="p-4 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3 z-10">
-                <button 
-                    type="button" 
-                    onClick={onClose} 
-                    className="px-6 py-4 text-slate-400 dark:text-slate-500 font-black uppercase text-[10px] tracking-widest hover:text-red-500 transition-colors"
-                >
-                    Cancelar
-                </button>
-                <button 
-                    type="submit" 
-                    disabled={isProcessingFile}
-                    className={`px-10 py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl transition-all active:scale-95 disabled:opacity-50
-                        ${items.length === 0 ? 'bg-red-500 hover:bg-red-600' : 'bg-[#064e3b] dark:bg-emerald-700 hover:bg-emerald-900 dark:hover:bg-emerald-600'}
-                    `}
-                >
-                    {items.length === 0 ? 'Confirmar Exclusão da O.R' : (items.some(i => !!i.id) ? 'Salvar Alterações Unificadas' : 'Confirmar O.R')}
-                </button>
-            </div>
-        </form>
+                {/* Footer Actions */}
+                <div className="p-4 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex justify-between gap-3 z-10 shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
+                    <div className="md:hidden flex-1">
+                        <button type="button" onClick={onClose} className="w-full py-4 text-slate-400 font-black uppercase text-[10px] bg-slate-100 dark:bg-slate-800 rounded-2xl">Voltar</button>
+                    </div>
+                    <div className="flex gap-3 flex-1 justify-end">
+                        <button 
+                            type="button" 
+                            onClick={onClose} 
+                            className="hidden md:block px-6 py-4 text-slate-400 dark:text-slate-500 font-black uppercase text-[10px] tracking-widest hover:text-red-500 transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            type="submit" 
+                            disabled={isProcessingFile}
+                            className={`w-full md:w-auto px-12 py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl transition-all active:scale-95 disabled:opacity-50
+                                ${items.length === 0 ? 'bg-red-500 hover:bg-red-600' : 'bg-[#064e3b] dark:bg-emerald-700 hover:bg-emerald-900 dark:hover:bg-emerald-600'}
+                            `}
+                        >
+                            {items.length === 0 ? 'Excluir O.R' : (items.some(i => !!i.id) ? 'Salvar Tudo' : 'Criar O.R')}
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
         
         {/* Hidden Input for File Upload */}
         <input 
@@ -554,11 +746,11 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
                       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   </div>
                   
-                  <h3 className="text-xl font-black text-center text-slate-900 dark:text-white uppercase mb-2">Excluir Item Permanentemente?</h3>
+                  <h3 className="text-xl font-black text-center text-slate-900 dark:text-white uppercase mb-2">Excluir Item?</h3>
                   
                   {deleteCandidate.index === -1 ? (
                       <p className="text-xs font-bold text-center text-slate-500 dark:text-slate-400 mb-6">
-                          Você está prestes a remover <span className="text-red-500">TODOS OS ITENS</span>.<br/>Isso resultará na exclusão completa da Ordem de Serviço do sistema.
+                          Você está prestes a remover <span className="text-red-500">TODOS OS ITENS</span>.<br/>Isso excluirá a Ordem de Serviço.
                       </p>
                   ) : (
                       <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl mb-6 text-center">
@@ -566,15 +758,8 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
                           <p className="text-sm font-bold text-slate-800 dark:text-white line-clamp-2">
                               {deleteCandidate.item.item || 'Item sem descrição'}
                           </p>
-                          {deleteCandidate.item.id && (
-                              <span className="text-[9px] text-red-400 font-bold mt-2 block uppercase">⚠️ Este item já existe no banco de dados</span>
-                          )}
                       </div>
                   )}
-
-                  <p className="text-[10px] font-bold text-center text-red-500 uppercase tracking-widest mb-6 animate-pulse">
-                      Ação Irreversível ao Salvar
-                  </p>
 
                   <div className="flex gap-3">
                       <button 
@@ -587,7 +772,41 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
                           onClick={deleteCandidate.index === -1 ? confirmDeleteAll : confirmRemoveItem}
                           className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-600 shadow-lg shadow-red-500/30 transition-colors"
                       >
-                          Confirmar Exclusão
+                          Confirmar
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* --- MODAL DEDICADO DE EXCLUSÃO DE ANEXO --- */}
+      {attachmentToDelete && (
+          <div className="fixed inset-0 z-[750] flex items-center justify-center bg-slate-900/90 backdrop-blur-xl p-4 animate-in zoom-in-95 duration-200">
+              <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[32px] p-8 border-[4px] border-amber-500 shadow-2xl relative">
+                  <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-500">
+                      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                  
+                  <h3 className="text-lg font-black text-center text-slate-900 dark:text-white uppercase mb-4">Excluir Anexo?</h3>
+                  
+                  <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl mb-6 text-center">
+                      <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate">
+                          {attachmentToDelete.name}
+                      </p>
+                  </div>
+
+                  <div className="flex gap-3">
+                      <button 
+                          onClick={() => setAttachmentToDelete(null)}
+                          className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                      >
+                          Voltar
+                      </button>
+                      <button 
+                          onClick={confirmRemoveAttachment}
+                          className="flex-1 py-3 bg-amber-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-600 shadow-lg shadow-amber-500/30 transition-colors"
+                      >
+                          Apagar
                       </button>
                   </div>
               </div>

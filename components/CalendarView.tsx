@@ -5,11 +5,12 @@ import { Order } from '../types';
 interface CalendarViewProps {
   orders: Order[];
   onEditOrder: (order: Order) => void;
+  onDateClick?: (dateStr: string) => void; // Nova prop para clique na data
 }
 
 type ViewMode = 'SEMANA' | 'MÊS' | 'ANO';
 
-const CalendarView: React.FC<CalendarViewProps> = ({ orders, onEditOrder }) => {
+const CalendarView: React.FC<CalendarViewProps> = ({ orders, onEditOrder, onDateClick }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('MÊS');
   const [filterMode, setFilterMode] = useState<'TODAS' | 'OPERACIONAIS' | 'CONCLUÍDAS'>('TODAS');
@@ -196,16 +197,19 @@ const CalendarView: React.FC<CalendarViewProps> = ({ orders, onEditOrder }) => {
 
               const dayOrders = item.dateStr ? filteredOrders.filter(o => o.dataEntrega === item.dateStr) : [];
               const isToday = new Date().toISOString().split('T')[0] === item.dateStr;
-              
               const hasAtrasada = dayOrders.some(o => !o.isArchived && new Date(o.dataEntrega) < new Date(new Date().setHours(0,0,0,0)));
+              
+              // Contadores
+              const totalItems = dayOrders.length;
 
               return (
                 <div 
                   key={idx} 
-                  className={`min-h-[100px] md:min-h-[140px] border-b md:border-r border-slate-100 dark:border-slate-800 p-3 flex flex-col transition-all relative group
+                  className={`min-h-[100px] md:min-h-[140px] border-b md:border-r border-slate-100 dark:border-slate-800 p-3 flex flex-col transition-all relative group cursor-pointer
                     bg-white dark:bg-slate-900 hover:bg-slate-50/50 dark:hover:bg-slate-800/50
                     ${isToday ? 'bg-emerald-50/20 dark:bg-emerald-900/10 ring-1 ring-inset ring-emerald-100 dark:ring-emerald-900' : ''}
                   `}
+                  onClick={() => item.dateStr && onDateClick?.(item.dateStr)}
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center gap-2">
@@ -217,9 +221,16 @@ const CalendarView: React.FC<CalendarViewProps> = ({ orders, onEditOrder }) => {
                             {new Date(year, month, item.day).toLocaleDateString('pt-BR', { weekday: 'short' })}
                         </span>
                     </div>
-                    {hasAtrasada && (
-                        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                    )}
+                    <div className="flex gap-1">
+                        {totalItems > 0 && (
+                            <span className="bg-slate-200 dark:bg-slate-700 text-[8px] font-black text-slate-600 dark:text-slate-300 px-1.5 rounded-md min-w-[18px] text-center" title="Total de Ordens">
+                                {totalItems}
+                            </span>
+                        )}
+                        {hasAtrasada && (
+                            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse mt-1"></span>
+                        )}
+                    </div>
                   </div>
                   
                   <div className="flex-1 space-y-1 overflow-y-auto custom-scrollbar pr-1 max-h-[120px]">
@@ -231,7 +242,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ orders, onEditOrder }) => {
                         return (
                         <button
                             key={o.id}
-                            onClick={() => onEditOrder(o)}
+                            onClick={(e) => { e.stopPropagation(); onEditOrder(o); }}
                             className={`w-full text-left px-2 py-2 rounded-xl text-[8px] font-black truncate border transition-all flex items-center gap-2
                             ${o.isArchived 
                                 ? 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-100 dark:border-slate-700 italic opacity-60' 

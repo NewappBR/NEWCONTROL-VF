@@ -79,11 +79,16 @@ export const generateTechnicalSheetHtml = (
               </div>
               <div style="padding: 10px;">
                   <div style="margin-bottom:5px;">${refDisplay} <span style="font-size:12px; font-weight:bold; text-transform:uppercase;">${item.item}</span></div>
-                  <div style="display:flex; justify-content:space-between; font-size:9px; margin-top:8px;">
-                      <span><strong>Entrega Prevista:</strong> ${item.dataEntrega.split('-').reverse().join('/')}</span>
-                      <span><strong>Data Criação:</strong> ${item.createdAt ? new Date(item.createdAt).toLocaleDateString('pt-BR') : '-'}</span>
+                  
+                  <div style="display:flex; justify-content:space-between; align-items: flex-end; margin-top:15px; border-top: 1px dashed #ccc; padding-top: 8px;">
+                      <span style="font-size:9px;"><strong>Data Criação:</strong> ${item.createdAt ? new Date(item.createdAt).toLocaleDateString('pt-BR') : '-'}</span>
+                      <div style="border: 2px solid #000; padding: 5px 10px; text-align: center;">
+                          <span style="display:block; font-size:8px; font-weight:bold; text-transform:uppercase;">ENTREGA PREVISTA</span>
+                          <span style="font-size: 16px; font-weight: 900;">${item.dataEntrega.split('-').reverse().join('/')}</span>
+                      </div>
                   </div>
-                  ${item.observacao ? `<div style="font-style:italic; background:#fffbe6; padding:4px; border:1px solid #ccc; margin-top:5px; font-size:9px;">OBS: ${item.observacao}</div>` : ''}
+                  
+                  ${item.observacao ? `<div style="font-style:italic; background:#fffbe6; padding:4px; border:1px solid #ccc; margin-top:10px; font-size:9px;">OBS: ${item.observacao}</div>` : ''}
               </div>
           </div>
       `;
