@@ -1,0 +1,147 @@
+
+import { Order, CompanySettings, DEPARTMENTS, ProductionStep } from '../types';
+
+export const generateTechnicalSheetHtml = (
+  order: Order, 
+  allOrders: Order[], 
+  companySettings: CompanySettings
+) => {
+  // Encontrar itens irmãos (mesma O.R) e ordenar
+  const siblingItems = allOrders
+    .filter(o => o.or === order.or)
+    .sort((a, b) => {
+        const refA = a.numeroItem || '';
+        const refB = b.numeroItem || '';
+        return refA.localeCompare(refB, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+  const logoHtml = companySettings?.logoUrl 
+    ? `<img src="${companySettings.logoUrl}" style="width: 50px; height: 50px; object-fit: contain; filter: grayscale(100%);">` 
+    : '';
+
+  const allAttachments = siblingItems.flatMap(i => i.attachments || []);
+  const uniqueAttachments = Array.from(new Set(allAttachments.map(a => a.name)));
+  const attachmentSectionHtml = uniqueAttachments.length > 0 
+      ? `<div style="margin-top:10px; font-size:10px; border-top:1px dashed #ccc; padding-top:5px;"><strong>ANEXOS:</strong> ${uniqueAttachments.join(', ')}</div>`
+      : '';
+
+  const headerHtml = `
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:3px solid #000; padding-bottom:10px; margin-bottom:20px;">
+      <div style="display: flex; gap: 15px; align-items: center;">
+        ${logoHtml}
+        <div>
+          <h1 style="margin:0; font-size:20px; text-transform:uppercase;">${companySettings?.name || 'NEWCOM CONTROL'}</h1>
+          <p style="margin:2px 0 0; font-size:10px; color:#555; letter-spacing:1px; font-weight:bold;">FICHA TÉCNICA DE PRODUÇÃO</p>
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <div style="background: #000; color: #fff; padding: 4px 8px; font-weight: bold; font-size: 10px; display: inline-block; margin-bottom: 2px;">DOCUMENTO INTERNO</div>
+        <p style="margin:0; font-size:9px; font-weight:bold;">EMISSÃO: ${new Date().toLocaleString('pt-BR')}</p>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 20px; border: 1px solid #000; padding: 15px;">
+      <div style="flex:1;">
+          <span style="font-size: 9px; font-weight: bold; text-transform: uppercase; color: #666; display:block; margin-bottom:2px;">CLIENTE / PROJETO</span>
+          <div style="font-size: 16px; font-weight: 900; text-transform: uppercase;">${order.cliente}</div>
+          
+          <div style="display:flex; gap:20px; margin-top:10px;">
+              <div>
+                  <span style="font-size: 8px; font-weight: bold; text-transform: uppercase; color: #666; display:block;">VENDEDOR</span>
+                  <span style="font-size: 11px; font-weight: bold; text-transform: uppercase;">${order.vendedor}</span>
+              </div>
+              <div>
+                  <span style="font-size: 8px; font-weight: bold; text-transform: uppercase; color: #666; display:block;">PRIORIDADE</span>
+                  <span style="font-size: 11px; font-weight: bold; text-transform: uppercase;">${order.prioridade || 'MÉDIA'}</span>
+              </div>
+              <div>
+                  <span style="font-size: 8px; font-weight: bold; text-transform: uppercase; color: #666; display:block;">ABERTURA</span>
+                  <span style="font-size: 11px; font-weight: bold; text-transform: uppercase;">${order.createdAt ? new Date(order.createdAt).toLocaleDateString('pt-BR') : '-'}</span>
+              </div>
+          </div>
+      </div>
+      <div style="text-align: right; border-left:1px solid #ccc; padding-left:20px; min-width:120px;">
+          <span style="font-size: 9px; font-weight: bold; text-transform: uppercase; color: #666;">ORDEM DE SERVIÇO</span>
+          <div style="font-size: 42px; font-weight: 900; line-height: 1;">#${order.or}</div>
+          <div style="font-size: 10px; font-weight: bold; margin-top: 5px;">${siblingItems.length} ITEM(NS)</div>
+      </div>
+    </div>
+  `;
+
+  const itemsHtml = siblingItems.map((item, idx) => {
+      const refDisplay = item.numeroItem ? `<span style="background:#000; color:#fff; padding:2px 5px; font-size:9px; font-weight:bold; margin-right:5px;">REF: ${item.numeroItem}</span>` : '';
+      
+      return `
+          <div style="margin-bottom: 10px; border: 1px solid #000; page-break-inside: avoid;">
+              <div style="background:#f0f0f0; padding: 6px 10px; border-bottom:1px solid #000; display:flex; justify-content:space-between; align-items:center;">
+                  <span style="font-weight:bold; font-size:10px;">ITEM #${idx + 1}</span>
+                  <span style="font-size:9px; font-weight:bold;">QTD: ${item.quantidade || '1'}</span>
+              </div>
+              <div style="padding: 10px;">
+                  <div style="margin-bottom:5px;">${refDisplay} <span style="font-size:12px; font-weight:bold; text-transform:uppercase;">${item.item}</span></div>
+                  <div style="display:flex; justify-content:space-between; font-size:9px; margin-top:8px;">
+                      <span><strong>Entrega Prevista:</strong> ${item.dataEntrega.split('-').reverse().join('/')}</span>
+                      <span><strong>Data Criação:</strong> ${item.createdAt ? new Date(item.createdAt).toLocaleDateString('pt-BR') : '-'}</span>
+                  </div>
+                  ${item.observacao ? `<div style="font-style:italic; background:#fffbe6; padding:4px; border:1px solid #ccc; margin-top:5px; font-size:9px;">OBS: ${item.observacao}</div>` : ''}
+              </div>
+          </div>
+      `;
+  }).join('');
+
+  const allHistory = siblingItems.flatMap(i => i.history || []).sort((a, b) => 
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+
+  const historyRows = allHistory.length > 0 ? `
+      <table style="width:100%; border-collapse:collapse; font-size:9px; margin-top:5px; border:1px solid #000;">
+          <thead>
+              <tr style="background:#ddd;">
+                  <th style="border:1px solid #000; padding:4px; text-align:left;">DATA / HORA</th>
+                  <th style="border:1px solid #000; padding:4px; text-align:left;">SETOR</th>
+                  <th style="border:1px solid #000; padding:4px; text-align:left;">STATUS</th>
+                  <th style="border:1px solid #000; padding:4px; text-align:left;">RESPONSÁVEL</th>
+              </tr>
+          </thead>
+          <tbody>
+              ${allHistory.map(h => `
+                  <tr>
+                      <td style="border:1px solid #000; padding:3px;">${new Date(h.timestamp).toLocaleString('pt-BR')}</td>
+                      <td style="border:1px solid #000; padding:3px;">${DEPARTMENTS[h.sector] || h.sector}</td>
+                      <td style="border:1px solid #000; padding:3px; font-weight:bold;">${h.status}</td>
+                      <td style="border:1px solid #000; padding:3px;">${h.userName}</td>
+                  </tr>
+              `).join('')}
+          </tbody>
+      </table>
+  ` : '<p style="font-size:9px; color:#999; font-style:italic;">Sem histórico registrado.</p>';
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>FICHA TÉCNICA - OR ${order.or}</title>
+      <style>
+        @page { size: A4; margin: 10mm; }
+        body { font-family: 'Helvetica', sans-serif; margin: 0; padding: 0; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8px; color: #999; border-top: 1px solid #eee; padding-top: 5px; background:#fff; }
+      </style>
+    </head>
+    <body>
+      ${headerHtml}
+      <div style="margin-bottom:20px;">${attachmentSectionHtml}</div>
+      <h3 style="font-size:12px; font-weight:900; text-transform:uppercase; border-bottom:2px solid #000; margin-bottom:10px; padding-bottom:2px;">LISTA DE PRODUÇÃO</h3>
+      ${itemsHtml}
+      <div style="margin-top:20px; page-break-inside: avoid;">
+          <h3 style="font-size:11px; font-weight:bold; text-transform:uppercase; margin-bottom:5px; background:#000; color:#fff; padding:2px 5px; display:inline-block;">RASTREABILIDADE GERAL</h3>
+          ${historyRows}
+      </div>
+      <div style="margin-top:40px; display:flex; justify-content:space-between; page-break-inside: avoid;">
+          <div style="border-top:1px solid #000; width:40%; text-align:center; font-size:8px; padding-top:5px;">VISTO PRODUÇÃO</div>
+          <div style="border-top:1px solid #000; width:40%; text-align:center; font-size:8px; padding-top:5px;">VISTO QUALIDADE</div>
+      </div>
+      <div class="footer">DOCUMENTO PROCESSADO PELO SISTEMA NEWCOM CONTROL - OR #${order.or}</div>
+    </body>
+    </html>
+  `;
+};
