@@ -15,6 +15,7 @@ interface OrderModalProps {
 // Tipo interno para gerenciar os itens no estado do formulário
 interface OrderItemForm extends Partial<Order> {
   tempId: string; // Identificador temporário para a UI
+  hasDuplicateError?: boolean; // Controle local de erro
 }
 
 const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose, onSave, currentUser, companySettings, showToast }) => {
@@ -57,7 +58,8 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
             setItems(siblings.map(s => ({
                 ...s,
                 tempId: s.id,
-                quantidade: s.quantidade || '1'
+                quantidade: s.quantidade || '1',
+                hasDuplicateError: false
             })));
             
             // Sincroniza o cabeçalho com os dados mais recentes encontrados (caso haja divergência)
@@ -76,7 +78,7 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
 
         } else {
             // Fallback
-            setItems([{ ...order, tempId: order.id, quantidade: order.quantidade || '1' }]);
+            setItems([{ ...order, tempId: order.id, quantidade: order.quantidade || '1', hasDuplicateError: false }]);
         }
     } else {
         // Novo cadastro
@@ -86,7 +88,9 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
             quantidade: '1',
             item: '', 
             dataEntrega: new Date().toISOString().split('T')[0],
-            attachments: [] 
+            attachments: [],
+            isRemake: false,
+            hasDuplicateError: false
         }]);
     }
   }, [order]); 
@@ -122,7 +126,8 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
             const loadedItems = matchingOrders.map(s => ({
                 ...s,
                 tempId: s.id,
-                quantidade: s.quantidade || '1'
+                quantidade: s.quantidade || '1',
+                hasDuplicateError: false
             })).sort((a, b) => {
                 const refA = a.numeroItem || '';
                 const refB = b.numeroItem || '';
@@ -136,10 +141,61 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
   };
 
   const updateItem = (index: number, field: keyof OrderItemForm, value: any) => {
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setItems(newItems);
+    setItems(prevItems => {
+        const newItems = [...prevItems];
+        // Se estiver atualizando a referência, reseta o erro de duplicata temporariamente para revalidação
+        const duplicateReset = field === 'numeroItem' ? { hasDuplicateError: false } : {};
+        
+        newItems[index] = { 
+            ...newItems[index], 
+            [field]: value,
+            ...duplicateReset
+        };
+        return newItems;
+    });
   };
+
+  // Efeito para validar duplicidade em tempo real quando o item ativo ou sua referência muda
+  useEffect(() => {
+      const current = items[activeItemIndex];
+      if (!current || !current.numeroItem) return;
+
+      const currentRef = current.numeroItem.trim().toUpperCase();
+      if (!currentRef) return;
+
+      // Verifica duplicata global (ignora o próprio item se for edição)
+      const isGlobalDuplicate = existingOrders?.some(o => 
+          o.numeroItem?.trim().toUpperCase() === currentRef && 
+          o.id !== current.id // ID persistido
+      );
+
+      // Verifica duplicata local (na lista atual, ignora índice atual)
+      const isLocalDuplicate = items.some((item, idx) => 
+          idx !== activeItemIndex && 
+          item.numeroItem?.trim().toUpperCase() === currentRef
+      );
+
+      const isDuplicate = isGlobalDuplicate || isLocalDuplicate;
+
+      // Se detectou duplicata e NÃO é remake, marca erro. Se é remake, limpa erro.
+      if (isDuplicate && !current.isRemake) {
+          if (!current.hasDuplicateError) {
+              setItems(prev => {
+                  const next = [...prev];
+                  next[activeItemIndex] = { ...next[activeItemIndex], hasDuplicateError: true };
+                  return next;
+              });
+          }
+      } else {
+          if (current.hasDuplicateError) {
+              setItems(prev => {
+                  const next = [...prev];
+                  next[activeItemIndex] = { ...next[activeItemIndex], hasDuplicateError: false };
+                  return next;
+              });
+          }
+      }
+  }, [items[activeItemIndex]?.numeroItem, items[activeItemIndex]?.isRemake, activeItemIndex, existingOrders]); // Dependências controladas
 
   const getNextRefSuggestion = () => {
       const usedRefs = new Set<string>();
@@ -171,7 +227,9 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
       item: '',
       dataEntrega: new Date().toISOString().split('T')[0],
       createdAt: new Date().toISOString(), // Add creation date immediately
-      attachments: []
+      attachments: [],
+      isRemake: false,
+      hasDuplicateError: false
     };
     
     setItems(prev => [...prev, newItem]);
@@ -282,12 +340,19 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
     }
   };
 
+  const handleMarkAsRemake = () => {
+      setItems(prev => {
+          const next = [...prev];
+          next[activeItemIndex] = { ...next[activeItemIndex], isRemake: true, hasDuplicateError: false };
+          return next;
+      });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isProcessingFile) return;
 
     if (items.length === 0) {
-        // Se removeu tudo, confirma exclusão total
         setDeleteCandidate({ index: -1, item: { item: 'TODOS OS ITENS' } as any }); 
         return;
     }
@@ -297,41 +362,39 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
       return;
     }
 
-    // 1. Validar Campos Obrigatórios
+    // 1. Validar Campos Obrigatórios e Erros de Duplicidade
     for (let i = 0; i < items.length; i++) {
         if (!items[i].item) {
             alert(`O item #${i + 1} precisa de uma descrição.`);
-            setActiveItemIndex(i); // Jump to the invalid item
+            setActiveItemIndex(i);
+            return;
+        }
+        if (items[i].hasDuplicateError) {
+            alert(`O item #${i + 1} possui uma referência duplicada. Corrija ou marque como Refazimento.`);
+            setActiveItemIndex(i);
             return;
         }
     }
 
-    // 2. Validar Unicidade de Referências (Ref) dentro da O.R
-    const currentFormRefs = items.map(i => i.numeroItem).filter(Boolean);
-    const uniqueFormRefs = new Set(currentFormRefs);
-    if (uniqueFormRefs.size !== currentFormRefs.length) {
-        alert("ERRO: Existem Referências (Ref) duplicadas na lista de itens. Cada item deve ter uma referência única.");
-        return;
-    }
-
-    // Prepara o payload: TODOS os itens recebem os dados do cabeçalho atualizado
-    // Isso garante a regra "trabalhando conjunta como única ordem"
+    // Prepara o payload final
     const ordersToSave: Partial<Order>[] = items.map(item => ({
         ...item, 
-        // Força sincronização dos dados comuns
         or: commonData.or,
         cliente: commonData.cliente,
         vendedor: commonData.vendedor,
         prioridade: commonData.prioridade as any,
         observacao: commonData.observacao,
-        id: item.id || undefined 
+        id: item.id || undefined,
+        // Garante que flags temporárias não vão para o banco (embora o tipo OrderPartial ignore, boa prática)
+        hasDuplicateError: undefined,
+        tempId: undefined
     }));
 
     onSave(ordersToSave, deletedIds);
   };
 
   const confirmDeleteAll = () => {
-      onSave([], deletedIds); // Salva com lista vazia e ids deletados -> limpa tudo
+      onSave([], deletedIds);
   };
 
   // Helper function for scrolling tabs
@@ -478,10 +541,18 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
                                     h-10 shrink-0 rounded-xl border font-black text-[10px] flex items-center justify-center transition-all shadow-sm px-4 gap-1.5 whitespace-nowrap min-w-[60px]
                                     ${activeItemIndex === idx 
                                         ? 'bg-emerald-500 text-white border-emerald-600 scale-105 shadow-emerald-500/30 ring-2 ring-emerald-500/20' 
-                                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-emerald-500 hover:text-emerald-600'}
+                                        : it.hasDuplicateError 
+                                            ? 'bg-red-50 border-red-300 text-red-500 animate-pulse'
+                                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-emerald-500 hover:text-emerald-600'}
                                 `}
                             >
                                 <span className="text-sm leading-none">{String(idx + 1).padStart(2, '0')}</span>
+                                {it.isRemake && (
+                                    <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" title="Refazimento"></span>
+                                )}
+                                {it.hasDuplicateError && !it.isRemake && (
+                                    <span className="w-2 h-2 rounded-full bg-red-500" title="Erro: Duplicado"></span>
+                                )}
                                 {it.numeroItem && <span className="opacity-80 font-bold text-[9px] uppercase border-l pl-1.5 border-current leading-none">REF: {it.numeroItem}</span>}
                             </button>
                         ))}
@@ -581,15 +652,42 @@ const OrderModal: React.FC<OrderModalProps> = ({ order, existingOrders, onClose,
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Ref. Item</label>
+                                    <div className="space-y-1">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Ref. Item</label>
+                                            {activeItem.isRemake && (
+                                                <span className="text-[8px] font-black text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 rounded uppercase border border-orange-200 dark:border-orange-800 animate-pulse">⚠️ Refazimento</span>
+                                            )}
+                                        </div>
                                         <input 
                                             type="text" 
                                             value={activeItem.numeroItem || ''}
                                             onChange={e => updateItem(activeItemIndex, 'numeroItem', e.target.value.toUpperCase())}
-                                            className="w-full px-4 py-3 bg-amber-50 dark:bg-amber-900/10 dark:text-white border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-black uppercase focus:ring-2 ring-amber-500 outline-none text-amber-800"
+                                            className={`w-full px-4 py-3 bg-amber-50 dark:bg-amber-900/10 dark:text-white border rounded-xl text-xs font-black uppercase outline-none focus:ring-2 transition-colors
+                                                ${activeItem.hasDuplicateError && !activeItem.isRemake
+                                                    ? 'border-red-500 ring-2 ring-red-200 text-red-800 bg-red-50' 
+                                                    : activeItem.isRemake 
+                                                        ? 'border-orange-500 ring-2 ring-orange-200 text-orange-800 dark:text-orange-300' 
+                                                        : 'border-amber-200 dark:border-amber-800 focus:ring-amber-500 text-amber-800'}
+                                            `}
                                             placeholder="REF"
                                         />
+                                        {/* ALERTA DE DUPLICIDADE EM TEMPO REAL */}
+                                        {activeItem.hasDuplicateError && !activeItem.isRemake && (
+                                            <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center justify-between gap-2 animate-in slide-in-from-top-1">
+                                                <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                                                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeWidth="2"/></svg>
+                                                    <span className="text-[9px] font-bold leading-tight">Referência já existe!</span>
+                                                </div>
+                                                <button 
+                                                    type="button"
+                                                    onClick={handleMarkAsRemake}
+                                                    className="px-3 py-1 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-700 rounded text-[8px] font-black text-red-500 hover:bg-red-500 hover:text-white transition-colors uppercase whitespace-nowrap"
+                                                >
+                                                    É Refazimento?
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Entrega</label>

@@ -566,11 +566,16 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
                                                         <div key={item.id} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors" onClick={() => onShowTechSheet?.(item)}>
                                                             <div className="flex justify-between items-start mb-2">
                                                                 <div className="flex-1 pr-2">
-                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                                                                         <span className="text-[9px] font-black text-slate-300 dark:text-slate-600">#{String(idx + 1).padStart(2, '0')}</span>
                                                                         {item.numeroItem && (
                                                                             <span className="text-[8px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 rounded">
                                                                                 REF: {item.numeroItem}
+                                                                            </span>
+                                                                        )}
+                                                                        {item.isRemake && (
+                                                                            <span className="text-[8px] font-black bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-1.5 rounded uppercase border border-orange-200 dark:border-orange-800">
+                                                                                ⚠️ Refazimento
                                                                             </span>
                                                                         )}
                                                                     </div>
@@ -786,6 +791,11 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
                                                           <div className="flex items-center flex-wrap gap-2 mb-0.5">
                                                               {order.numeroItem && (
                                                                   <span className="text-[8px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded inline-block uppercase tracking-wider">REF: {order.numeroItem}</span>
+                                                              )}
+                                                              {order.isRemake && (
+                                                                  <span className="text-[8px] font-black text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 px-1.5 py-0.5 rounded inline-block uppercase tracking-wider border border-orange-200 dark:border-orange-800">
+                                                                      ⚠️ Refazimento
+                                                                  </span>
                                                               )}
                                                               {order.dataEntrega !== orGroup.anchorDate && (
                                                                   <span className="text-[8px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">

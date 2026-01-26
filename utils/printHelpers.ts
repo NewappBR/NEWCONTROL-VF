@@ -71,10 +71,17 @@ export const generateTechnicalSheetHtml = (
   const itemsHtml = siblingItems.map((item, idx) => {
       const refDisplay = item.numeroItem ? `<span style="background:#000; color:#fff; padding:2px 5px; font-size:9px; font-weight:bold; margin-right:5px;">REF: ${item.numeroItem}</span>` : '';
       
+      // Lógica de destaque para refazimento
+      const itemHeaderStyle = item.isRemake ? 'background:#fff3cd; border-bottom:2px solid #ffc107;' : 'background:#f0f0f0; border-bottom:1px solid #000;';
+      const remakeLabel = item.isRemake ? '<span style="border: 2px solid #000; padding: 2px 6px; font-weight: 900; margin-left: 10px; background: #fff; color: #d97706; font-size: 10px;">⚠ REFAZIMENTO</span>' : '';
+
       return `
           <div style="margin-bottom: 10px; border: 1px solid #000; page-break-inside: avoid;">
-              <div style="background:#f0f0f0; padding: 6px 10px; border-bottom:1px solid #000; display:flex; justify-content:space-between; align-items:center;">
-                  <span style="font-weight:bold; font-size:10px;">ITEM #${idx + 1}</span>
+              <div style="${itemHeaderStyle} padding: 6px 10px; display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <span style="font-weight:bold; font-size:10px;">ITEM #${idx + 1}</span>
+                    ${remakeLabel}
+                  </div>
                   <span style="font-size:9px; font-weight:bold;">QTD: ${item.quantidade || '1'}</span>
               </div>
               <div style="padding: 10px;">

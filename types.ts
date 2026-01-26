@@ -90,6 +90,7 @@ export interface Order {
   attachments?: Attachment[]; // Lista de anexos
   isArchived: boolean;
   archivedAt?: string;
+  isRemake?: boolean; // Flag para indicar se é um item de refazimento/erro
 }
 
 export interface SortConfig {

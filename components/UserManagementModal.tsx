@@ -41,7 +41,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [logSearchTerm, setLogSearchTerm] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'USUÁRIOS' | 'LOGS' | 'CONFIGURAÇÕES' | 'RAMAIS' | 'MANUTENÇÃO'>('USUÁRIOS');
+  const [activeTab, setActiveTab] = useState<'USUÁRIOS' | 'LOGS' | 'CONFIGURAÇÕES' | 'RAMAIS' | 'MANUTENÇÃO' | 'RELATÓRIOS'>('USUÁRIOS');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   
@@ -50,17 +50,171 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
   
   const [newRamal, setNewRamal] = useState<Partial<Ramal>>({ nome: '', numero: '', departamento: '' });
 
+  // Manutenção States
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [previewItems, setPreviewItems] = useState<Order[] | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-  
   const [securityStep, setSecurityStep] = useState<'IDLE' | 'VERIFYING'>('IDLE');
   const [generatedToken, setGeneratedToken] = useState<string>('');
   const [inputToken, setInputToken] = useState('');
 
+  // Relatórios States
+  const [reportStartDate, setReportStartDate] = useState(() => {
+      const date = new Date();
+      date.setDate(1); // Primeiro dia do mês atual
+      return date.toISOString().split('T')[0];
+  });
+  const [reportEndDate, setReportEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+
   const [localSettings, setLocalSettings] = useState<CompanySettings>(companySettings);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // --- STATS CALCULATION FOR REPORTS ---
+  const stats = useMemo(() => {
+      // Filtragem por data (usando createdAt)
+      const filteredOrders = orders.filter(o => {
+          if (!o.createdAt) return false;
+          const createdDate = o.createdAt.split('T')[0];
+          return createdDate >= reportStartDate && createdDate <= reportEndDate;
+      });
+
+      const totalOrders = filteredOrders.length;
+      const totalArchived = filteredOrders.filter(o => o.isArchived).length;
+      const totalActive = totalOrders - totalArchived;
+      const totalRemakes = filteredOrders.filter(o => o.isRemake).length;
+      
+      // 1. Vendor Stats
+      const vendorCounts: Record<string, { total: number, active: number, remakes: number }> = {};
+      filteredOrders.forEach(o => {
+          const v = o.vendedor || 'N/A';
+          if (!vendorCounts[v]) vendorCounts[v] = { total: 0, active: 0, remakes: 0 };
+          vendorCounts[v].total++;
+          if (!o.isArchived) vendorCounts[v].active++;
+          if (o.isRemake) vendorCounts[v].remakes++;
+      });
+      const vendorList = Object.entries(vendorCounts)
+          .map(([name, data]) => ({ name, ...data }))
+          .sort((a, b) => b.total - a.total);
+
+      // 2. Client Stats (Top 5)
+      const clientCounts: Record<string, number> = {};
+      filteredOrders.forEach(o => {
+          const c = o.cliente || 'N/A';
+          clientCounts[c] = (clientCounts[c] || 0) + 1;
+      });
+      const topClients = Object.entries(clientCounts)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5);
+
+      // 3. Sector Efficiency Stats
+      // Estrutura: Setor -> { user: countCompleted, durations: [] }
+      const sectorStats: Record<string, { 
+          topUser: string; 
+          maxCount: number; 
+          userCounts: Record<string, number>;
+          durations: number[]; // em minutos
+      }> = {};
+
+      // Inicializa setores
+      Object.keys(DEPARTMENTS).forEach(k => {
+          sectorStats[k] = { topUser: '-', maxCount: 0, userCounts: {}, durations: [] };
+      });
+
+      filteredOrders.forEach(o => {
+          if (!o.history) return;
+          
+          // Agrupar histórico por setor para calcular tempos
+          const sectorTransitions: Record<string, { start?: Date, end?: Date }> = {};
+
+          o.history.forEach(h => {
+              // Contagem de quem finalizou
+              if (h.status === 'Concluído') {
+                  if (!sectorStats[h.sector]) sectorStats[h.sector] = { topUser: '-', maxCount: 0, userCounts: {}, durations: [] };
+                  const s = sectorStats[h.sector];
+                  s.userCounts[h.userName] = (s.userCounts[h.userName] || 0) + 1;
+                  
+                  // Atualiza Top User
+                  if (s.userCounts[h.userName] > s.maxCount) {
+                      s.maxCount = s.userCounts[h.userName];
+                      s.topUser = h.userName;
+                  }
+                  
+                  if (!sectorTransitions[h.sector]) sectorTransitions[h.sector] = {};
+                  sectorTransitions[h.sector].end = new Date(h.timestamp);
+              }
+
+              if (h.status === 'Em Produção') {
+                  if (!sectorTransitions[h.sector]) sectorTransitions[h.sector] = {};
+                  sectorTransitions[h.sector].start = new Date(h.timestamp);
+              }
+          });
+
+          // Calcular duração se houver par Start/End
+          Object.entries(sectorTransitions).forEach(([sec, times]) => {
+              if (times.start && times.end && sectorStats[sec]) {
+                  const diffMinutes = (times.end.getTime() - times.start.getTime()) / 1000 / 60;
+                  if (diffMinutes > 0) sectorStats[sec].durations.push(diffMinutes);
+              }
+          });
+      });
+
+      // Calcular médias e formatar
+      const sectorPerformance = Object.entries(sectorStats).map(([key, data]) => {
+          const avgMinutes = data.durations.length > 0 
+              ? data.durations.reduce((a, b) => a + b, 0) / data.durations.length 
+              : 0;
+          
+          // Formatar tempo
+          let timeDisplay = '-';
+          if (avgMinutes > 0) {
+              if (avgMinutes < 60) timeDisplay = `${Math.round(avgMinutes)} min`;
+              else {
+                  const hours = Math.floor(avgMinutes / 60);
+                  const mins = Math.round(avgMinutes % 60);
+                  timeDisplay = `${hours}h ${mins}m`;
+              }
+          }
+
+          return {
+              key,
+              label: DEPARTMENTS[key as keyof typeof DEPARTMENTS],
+              topUser: data.topUser,
+              topUserCount: data.maxCount,
+              avgTime: timeDisplay,
+              avgMinutes // para ordenação de "Gargalo"
+          };
+      });
+
+      // Lead Time Médio (Global)
+      let totalCycleTimeMs = 0;
+      let countCycleTime = 0;
+      filteredOrders.forEach(o => {
+          if (o.isArchived && o.createdAt && o.archivedAt) {
+              const start = new Date(o.createdAt).getTime();
+              const end = new Date(o.archivedAt).getTime();
+              const diff = end - start;
+              if (diff > 0) {
+                  totalCycleTimeMs += diff;
+                  countCycleTime++;
+              }
+          }
+      });
+      const avgCycleTimeDays = countCycleTime > 0 ? (totalCycleTimeMs / countCycleTime / (1000 * 60 * 60 * 24)).toFixed(1) : '0.0';
+
+      return {
+          totalOrders,
+          totalActive,
+          totalArchived,
+          totalRemakes,
+          remakeRate: totalOrders > 0 ? ((totalRemakes / totalOrders) * 100).toFixed(1) : '0.0',
+          vendorList,
+          topClients,
+          sectorPerformance,
+          avgCycleTimeDays
+      };
+  }, [orders, reportStartDate, reportEndDate]);
 
   const filteredUsers = useMemo(() => {
     return users.filter(u => 
@@ -264,6 +418,154 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
     setInputToken('');
   };
 
+  const handlePrintSystemReport = () => {
+      const w = window.open('', '_blank');
+      if (!w) return;
+
+      const logoImg = companySettings.logoUrl ? `<img src="${companySettings.logoUrl}" style="height:50px; width:auto; object-fit:contain;">` : '';
+      
+      const vendorRows = stats.vendorList.map((v, i) => `
+        <tr>
+            <td style="padding:8px; border-bottom:1px solid #eee;">#${i+1}</td>
+            <td style="padding:8px; border-bottom:1px solid #eee; font-weight:bold;">${v.name}</td>
+            <td style="padding:8px; border-bottom:1px solid #eee; text-align:center;">${v.total}</td>
+            <td style="padding:8px; border-bottom:1px solid #eee; text-align:center; color:#10b981;">${v.active}</td>
+            <td style="padding:8px; border-bottom:1px solid #eee; text-align:center; color:#f59e0b;">${v.remakes}</td>
+        </tr>
+      `).join('');
+
+      const clientRows = stats.topClients.map((c, i) => `
+        <tr>
+            <td style="padding:8px; border-bottom:1px solid #eee;">#${i+1}</td>
+            <td style="padding:8px; border-bottom:1px solid #eee; font-weight:bold; text-transform:uppercase;">${c.name}</td>
+            <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">${c.count} Ordens</td>
+        </tr>
+      `).join('');
+
+      const sectorRows = stats.sectorPerformance.map((s, i) => `
+        <tr>
+            <td style="padding:8px; border-bottom:1px solid #eee;">${s.label}</td>
+            <td style="padding:8px; border-bottom:1px solid #eee;"><strong>${s.topUser}</strong> (${s.topUserCount})</td>
+            <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">${s.avgTime}</td>
+        </tr>
+      `).join('');
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Relatório Gerencial - ${companySettings.name}</title>
+            <style>
+                body { font-family: 'Segoe UI', sans-serif; color: #333; padding: 40px; }
+                h1, h2, h3 { margin: 0; text-transform: uppercase; }
+                .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 40px; }
+                .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px; }
+                .card { border: 1px solid #ddd; padding: 20px; border-radius: 8px; background: #f9f9f9; }
+                .stat-num { font-size: 32px; font-weight: 900; color: #064e3b; margin-top: 10px; display: block; }
+                .stat-label { font-size: 10px; font-weight: bold; text-transform: uppercase; color: #666; letter-spacing: 1px; }
+                table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                th { text-align: left; padding: 8px; background: #eee; text-transform: uppercase; font-size: 10px; }
+                .print-btn { display: block; padding: 10px 20px; background: #000; color: #fff; text-decoration: none; width: fit-content; margin: 20px auto; border-radius: 5px; font-weight: bold; }
+                @media print { .print-btn { display: none; } body { padding: 0; } }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div style="display:flex; gap:15px; align-items:center;">
+                    ${logoImg}
+                    <div>
+                        <h1>${companySettings.name}</h1>
+                        <p style="font-size:12px; font-weight:bold; color:#666;">RELATÓRIO GERENCIAL - PERÍODO: ${reportStartDate.split('-').reverse().join('/')} A ${reportEndDate.split('-').reverse().join('/')}</p>
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <p style="font-size:10px; font-weight:bold;">DATA: ${new Date().toLocaleString('pt-BR')}</p>
+                </div>
+            </div>
+
+            <h3 style="margin-bottom:15px; font-size:14px; color:#999; border-bottom:1px solid #ccc;">Indicadores Principais</h3>
+            <div class="grid" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="card">
+                    <span class="stat-label">Total Ordens (Itens)</span>
+                    <span class="stat-num">${stats.totalOrders}</span>
+                </div>
+                <div class="card">
+                    <span class="stat-label">Itens Arquivados</span>
+                    <span class="stat-num">${stats.totalArchived}</span>
+                </div>
+                <div class="card">
+                    <span class="stat-label">Taxa Refazimento</span>
+                    <span class="stat-num" style="color: ${Number(stats.remakeRate) > 5 ? 'red' : 'orange'};">${stats.remakeRate}%</span>
+                    <span style="font-size:10px; color:#999;">${stats.totalRemakes} itens refeitos</span>
+                </div>
+                <div class="card">
+                    <span class="stat-label">Lead Time Médio</span>
+                    <span class="stat-num">${stats.avgCycleTimeDays} <span style="font-size:12px;">dias</span></span>
+                    <span style="font-size:10px; color:#999;">Criação até Arquivamento</span>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div>
+                    <h3 style="margin-bottom:15px; font-size:14px; color:#999; border-bottom:1px solid #ccc;">Ranking de Vendedores</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th width="50">#</th>
+                                <th>Vendedor</th>
+                                <th style="text-align:center;">Total</th>
+                                <th style="text-align:center;">Ativos</th>
+                                <th style="text-align:center;">Refaz</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${vendorRows}
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <h3 style="margin-bottom:15px; font-size:14px; color:#999; border-bottom:1px solid #ccc;">Top Clientes</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th width="50">#</th>
+                                <th>Cliente</th>
+                                <th style="text-align:right;">Volume</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${clientRows}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <h3 style="margin-bottom:15px; font-size:14px; color:#999; border-bottom:1px solid #ccc; margin-top:20px;">Produtividade por Setor</h3>
+            <table style="margin-bottom:20px;">
+                <thead>
+                    <tr>
+                        <th>Setor</th>
+                        <th>Top Operador (Qtd)</th>
+                        <th style="text-align:right;">Tempo Médio (Prod -> Conc)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${sectorRows}
+                </tbody>
+            </table>
+
+            <div style="margin-top:50px; text-align:center; font-size:10px; color:#999; border-top:1px solid #eee; padding-top:20px;">
+                Relatório gerado automaticamente pelo sistema NEWCOM CONTROL.
+            </div>
+
+            <a href="#" onclick="window.print(); return false;" class="print-btn">IMPRIMIR RELATÓRIO</a>
+        </body>
+        </html>
+      `;
+      w.document.write(html);
+      w.document.close();
+  };
+
   const handleDownloadAndVerify = async () => {
     if (!previewItems || previewItems.length === 0) return;
     setIsGeneratingReport(true);
@@ -332,6 +634,10 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 const attachCount = item.attachments?.length || 0;
                 const itemArchived = item.archivedAt ? new Date(item.archivedAt).toLocaleString('pt-BR') : '-';
 
+                // HIGHLIGHT REFAZIMENTO NO RELATÓRIO
+                const bgStyle = item.isRemake ? 'background:#fff7ed; border-left: 4px solid #f97316;' : 'background:#f8fafc; border-left: 1px solid #e2e8f0;';
+                const remakeBadge = item.isRemake ? '<span style="background:#f97316; color:white; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:900; margin-left:8px;">⚠️ REFAZIMENTO</span>' : '';
+
                 // Histórico deste item específico
                 const historyRows = (item.history || []).map(h => `
                     <tr>
@@ -343,12 +649,13 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 `).join('');
 
                 return `
-                    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:15px; margin-bottom:10px;">
+                    <div style="${bgStyle} border-right:1px solid #e2e8f0; border-top:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0; border-radius:4px; padding:15px; margin-bottom:10px;">
                         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
                             <div>
                                 <div style="display:flex; align-items:center; gap:8px;">
                                     ${item.numeroItem ? `<span style="background:#0f172a; color:white; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:bold;">REF: ${item.numeroItem}</span>` : ''}
                                     <span style="font-size:12px; font-weight:bold; text-transform:uppercase;">${item.item}</span>
+                                    ${remakeBadge}
                                 </div>
                                 <div style="margin-top:6px; font-size:10px; color:#64748b; display:flex; gap:15px;">
                                     <span><strong>Vendedor:</strong> ${item.vendedor}</span>
@@ -556,6 +863,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
             <div className="flex flex-wrap gap-2 md:flex-nowrap md:overflow-x-auto md:custom-scrollbar md:-mx-4 md:px-4">
               <TabButton id="USUÁRIOS" label="Colaboradores" />
               <TabButton id="LOGS" label="Auditoria" />
+              <TabButton id="RELATÓRIOS" label="Relatórios" />
               <TabButton id="RAMAIS" label="Ramais" />
               <TabButton id="CONFIGURAÇÕES" label="Empresa" />
               <TabButton id="MANUTENÇÃO" label="Manutenção" />
@@ -697,6 +1005,149 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   </div>
                 </div>
               </div>
+            ) : activeTab === 'RELATÓRIOS' ? (
+                <div className="max-w-6xl mx-auto space-y-6 pb-20 animate-in fade-in h-full flex flex-col">
+                    
+                    {/* Header de Filtro do Relatório */}
+                    <div className="bg-white dark:bg-slate-900 p-4 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row gap-4 items-end md:items-center justify-between shrink-0">
+                        <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+                            <div className="space-y-1 w-full md:w-40">
+                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1">Início</label>
+                                <input 
+                                    type="date"
+                                    value={reportStartDate}
+                                    onChange={e => setReportStartDate(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-white outline-none focus:ring-2 ring-emerald-500"
+                                />
+                            </div>
+                            <div className="space-y-1 w-full md:w-40">
+                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1">Fim</label>
+                                <input 
+                                    type="date"
+                                    value={reportEndDate}
+                                    onChange={e => setReportEndDate(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-white outline-none focus:ring-2 ring-emerald-500"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase hidden md:block">Analíticos Gerenciais</span>
+                            <button 
+                                onClick={handlePrintSystemReport}
+                                className="px-6 py-2.5 bg-slate-900 dark:bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg hover:bg-slate-700 dark:hover:bg-emerald-500 transition-all flex items-center gap-2 active:scale-95"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" strokeWidth="2.5"/></svg>
+                                Imprimir
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6">
+                        {/* KPI Cards */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="bg-white dark:bg-slate-900 p-5 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total no Período</span>
+                                <span className="block text-3xl font-[950] text-slate-900 dark:text-white mt-1 tabular-nums">{stats.totalOrders}</span>
+                                <div className="flex gap-2 mt-2">
+                                    <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">{stats.totalActive} Ativos</span>
+                                </div>
+                            </div>
+                            <div className="bg-white dark:bg-slate-900 p-5 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Refazimentos</span>
+                                <span className="block text-3xl font-[950] text-orange-500 mt-1 tabular-nums">{stats.totalRemakes}</span>
+                                <span className="text-[8px] font-bold text-slate-400 mt-1 block">Taxa: {stats.remakeRate}%</span>
+                            </div>
+                            <div className="bg-white dark:bg-slate-900 p-5 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lead Time Global</span>
+                                <span className="block text-3xl font-[950] text-blue-500 mt-1 tabular-nums">{stats.avgCycleTimeDays} <span className="text-sm font-bold text-slate-400">dias</span></span>
+                                <span className="text-[8px] font-bold text-slate-400 mt-1 block">Criação até Arquivamento</span>
+                            </div>
+                            {/* Sugestão de Ideia: Gargalos */}
+                            <div className="bg-white dark:bg-slate-900 p-5 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm border-l-4 border-l-red-400">
+                                <span className="text-[9px] font-black text-red-400 uppercase tracking-widest">Gargalo Potencial</span>
+                                {(() => {
+                                    const slowest = [...stats.sectorPerformance].sort((a,b) => b.avgMinutes - a.avgMinutes)[0];
+                                    return slowest && slowest.avgMinutes > 0 ? (
+                                        <>
+                                            <span className="block text-xl font-[950] text-slate-800 dark:text-white mt-1 leading-tight">{slowest.label.split('&')[0]}</span>
+                                            <span className="text-[9px] font-bold text-slate-400 mt-1 block">Média: {slowest.avgTime}</span>
+                                        </>
+                                    ) : (
+                                        <span className="block text-sm font-bold text-slate-400 mt-2">Sem dados suficientes</span>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Ranking Vendedores */}
+                            <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-6">
+                                <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-widest mb-4 border-b border-slate-100 dark:border-slate-700 pb-3">Volume por Vendedor</h4>
+                                <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                                    {stats.vendorList.map((v, idx) => (
+                                        <div key={v.name} className="flex items-center gap-3">
+                                            <span className="w-5 text-[10px] font-black text-slate-300 tabular-nums">#{idx + 1}</span>
+                                            <div className="flex-1">
+                                                <div className="flex justify-between mb-1">
+                                                    <span className="text-[10px] font-black text-slate-700 dark:text-slate-300 uppercase">{v.name}</span>
+                                                    <span className="text-[10px] font-bold text-slate-900 dark:text-white tabular-nums">{v.total}</span>
+                                                </div>
+                                                <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                                                    <div style={{ width: `${(v.active / v.total) * 100}%` }} className="bg-emerald-500 h-full"></div>
+                                                    <div style={{ width: `${(v.remakes / v.total) * 100}%` }} className="bg-orange-400 h-full"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Ranking Clientes */}
+                            <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-6">
+                                <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-widest mb-4 border-b border-slate-100 dark:border-slate-700 pb-3">Top 5 Clientes</h4>
+                                <div className="space-y-4">
+                                    {stats.topClients.map((c, idx) => (
+                                        <div key={c.name} className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3 overflow-hidden">
+                                                <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-500 shrink-0">{idx + 1}</div>
+                                                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase truncate">{c.name}</span>
+                                            </div>
+                                            <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded tabular-nums">{c.count} Ordens</span>
+                                        </div>
+                                    ))}
+                                    {stats.topClients.length === 0 && <p className="text-[10px] text-slate-400 text-center py-4">Sem dados no período.</p>}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Produtividade por Setor */}
+                        <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-6">
+                            <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-widest mb-4 border-b border-slate-100 dark:border-slate-700 pb-3">Produtividade & Tempos por Setor</h4>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="border-b border-slate-100 dark:border-slate-800">
+                                            <th className="pb-3 text-[9px] font-black text-slate-400 uppercase tracking-wider">Setor</th>
+                                            <th className="pb-3 text-[9px] font-black text-slate-400 uppercase tracking-wider">Maior Executor</th>
+                                            <th className="pb-3 text-[9px] font-black text-slate-400 uppercase tracking-wider text-right">Qtd.</th>
+                                            <th className="pb-3 text-[9px] font-black text-slate-400 uppercase tracking-wider text-right">Tempo Médio</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                                        {stats.sectorPerformance.map((s) => (
+                                            <tr key={s.key} className="group hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                                <td className="py-3 text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase">{s.label}</td>
+                                                <td className="py-3 text-[10px] font-black text-slate-900 dark:text-white uppercase">{s.topUser}</td>
+                                                <td className="py-3 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 text-right tabular-nums">{s.topUserCount > 0 ? s.topUserCount : '-'}</td>
+                                                <td className="py-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 text-right tabular-nums">{s.avgTime}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             ) : activeTab === 'RAMAIS' ? (
               <div className="max-w-3xl mx-auto space-y-4 md:space-y-8 animate-in slide-in-from-bottom-8 duration-500 pb-10">
                 <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-lg">
@@ -854,7 +1305,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 </div>
               </div>
             ) : (
-                // ... (MANUTENÇÃO tab content remains unchanged) ...
+                // ... (MANUTENÇÃO tab content) ...
                 <div className="max-w-4xl mx-auto space-y-4 animate-in slide-in-from-bottom-8 duration-500 h-full flex flex-col pb-20">
                   <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-xl flex flex-col h-full">
                       
