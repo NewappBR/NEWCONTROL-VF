@@ -169,10 +169,10 @@ const TechnicalSheetModal: React.FC<TechnicalSheetModalProps> = ({
         {/* Info Geral Sticky */}
         <div className="bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-sm z-10 px-4 pt-4 md:pt-12 pb-2 border-b border-slate-200 dark:border-slate-800 relative transition-all">
              
-             {/* Botão de Recolher/Expandir Header (Mobile) */}
+             {/* Botão de Recolher/Expandir Header (Mobile) - VISIBILIDADE MELHORADA */}
              <button 
                 onClick={() => setIsHeaderCollapsed(!isHeaderCollapsed)}
-                className="md:hidden absolute top-1 right-2 p-2 text-slate-400 hover:text-emerald-500 transition-colors z-20"
+                className="md:hidden absolute top-2 right-2 p-2.5 text-slate-600 dark:text-slate-200 bg-white/20 dark:bg-black/20 backdrop-blur-md rounded-full shadow-sm border border-white/30 dark:border-white/10 hover:bg-emerald-500 hover:text-white transition-all z-20 active:scale-95"
                 title={isHeaderCollapsed ? "Expandir Informações" : "Recolher Informações"}
              >
                 <svg className={`w-5 h-5 transform transition-transform ${isHeaderCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">

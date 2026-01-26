@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef } from 'react';
 import { User, UserRole, DEPARTMENTS, Order, HistoryEntry, CompanySettings, Ramal, GlobalLogEntry } from '../types';
 import { DEFAULT_USER_PASS } from '../constants';
@@ -267,18 +266,138 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const handleDownloadAndVerify = async () => {
     if (!previewItems || previewItems.length === 0) return;
     setIsGeneratingReport(true);
+    
+    // Geração do Token de Segurança
     const token = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedToken(token);
     
-    // Geração do HTML (Mantido conforme implementação anterior para brevidade)
     setTimeout(() => {
-        // ... (Lógica de geração de HTML permanece a mesma) ...
-        // Para simplificar a resposta XML, estou assumindo a mesma lógica aqui.
-        // Se precisar do código completo do relatório novamente, posso incluir.
+        // --- GERAÇÃO DO HTML DO RELATÓRIO ---
+        const logoImg = companySettings.logoUrl ? `<img src="${companySettings.logoUrl}" style="max-width:80px; max-height:80px;" />` : '';
+        const today = new Date().toLocaleString('pt-BR');
+        
+        // Seção Lista Resumida
+        const tableRows = previewItems.map(item => `
+            <tr>
+                <td style="border:1px solid #ddd; padding:8px; font-weight:bold;">${item.or}</td>
+                <td style="border:1px solid #ddd; padding:8px;">${item.cliente}</td>
+                <td style="border:1px solid #ddd; padding:8px;">${item.item}</td>
+                <td style="border:1px solid #ddd; padding:8px; text-align:right;">${item.dataEntrega.split('-').reverse().join('/')}</td>
+            </tr>
+        `).join('');
+
+        // Seção Detalhada
+        const detailedSections = previewItems.map((item, idx) => {
+            const historyRows = (item.history || []).map(h => `
+                <tr>
+                    <td style="border-bottom:1px solid #eee; padding:4px;">${new Date(h.timestamp).toLocaleString('pt-BR')}</td>
+                    <td style="border-bottom:1px solid #eee; padding:4px;">${h.userName}</td>
+                    <td style="border-bottom:1px solid #eee; padding:4px;">${h.sector}</td>
+                    <td style="border-bottom:1px solid #eee; padding:4px; font-weight:bold;">${h.status}</td>
+                </tr>
+            `).join('');
+
+            return `
+                <div style="page-break-inside:avoid; margin-bottom:30px; border:1px solid #000; padding:15px;">
+                    <h3 style="margin:0; background:#eee; padding:5px 10px; border-bottom:1px solid #000;">#${idx + 1} - O.R ${item.or}</h3>
+                    <div style="padding:10px;">
+                        <p><strong>Cliente:</strong> ${item.cliente}</p>
+                        <p><strong>Item:</strong> ${item.item}</p>
+                        <p><strong>Vendedor:</strong> ${item.vendedor} | <strong>Entrega:</strong> ${item.dataEntrega.split('-').reverse().join('/')}</p>
+                        <p><strong>Criação:</strong> ${item.createdAt ? new Date(item.createdAt).toLocaleString('pt-BR') : 'N/A'}</p>
+                    </div>
+                    <div style="margin-top:10px;">
+                        <h4 style="margin:0 0 5px 0; font-size:12px;">HISTÓRICO DE PRODUÇÃO</h4>
+                        <table style="width:100%; font-size:10px; border-collapse:collapse;">
+                            <thead style="background:#f9f9f9;">
+                                <tr>
+                                    <th style="text-align:left; padding:4px;">Data</th>
+                                    <th style="text-align:left; padding:4px;">User</th>
+                                    <th style="text-align:left; padding:4px;">Setor</th>
+                                    <th style="text-align:left; padding:4px;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>${historyRows || '<tr><td colspan="4" style="padding:4px; color:#999;">Sem histórico.</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Relatório de Exclusão - ${new Date().toISOString().split('T')[0]}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; font-size: 12px; line-height: 1.4; color: #333; margin: 20px; }
+                    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+                    .header h1 { margin: 0; font-size: 18px; text-transform: uppercase; }
+                    .token-box { border: 2px dashed red; padding: 10px; text-align: center; margin: 20px 0; background: #fff0f0; }
+                    .token-code { font-size: 24px; font-weight: bold; letter-spacing: 5px; color: red; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                    th { background: #f0f0f0; text-transform: uppercase; font-size: 10px; }
+                    .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #ddd; padding-top: 10px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div>${logoImg}</div>
+                    <div style="text-align:right;">
+                        <h1>${companySettings.name}</h1>
+                        <p>RELATÓRIO DE ARQUIVAMENTO E LIMPEZA</p>
+                        <p>Data: ${today}</p>
+                    </div>
+                </div>
+
+                <div class="token-box">
+                    <p style="margin:0; font-weight:bold; color:red;">TOKEN DE SEGURANÇA PARA EXCLUSÃO</p>
+                    <div class="token-code">${token}</div>
+                    <p style="margin:5px 0 0 0; font-size:10px;">Use este código para confirmar a exclusão permanente no sistema.</p>
+                </div>
+
+                <h2>RESUMO DOS ITENS (${previewItems.length})</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="border:1px solid #ddd; padding:8px; text-align:left;">O.R</th>
+                            <th style="border:1px solid #ddd; padding:8px; text-align:left;">CLIENTE</th>
+                            <th style="border:1px solid #ddd; padding:8px; text-align:left;">ITEM</th>
+                            <th style="border:1px solid #ddd; padding:8px; text-align:right;">ENTREGA</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRows}
+                    </tbody>
+                </table>
+
+                <div style="page-break-before: always;"></div>
+                <h2>DETALHAMENTO DE AUDITORIA</h2>
+                ${detailedSections}
+
+                <div class="footer">
+                    Documento gerado pelo sistema NEWCOM CONTROL. A exclusão destes dados é irreversível após confirmação via token.
+                </div>
+                
+                <script>window.onload = function() { window.print(); }</script>
+            </body>
+            </html>
+        `;
+
+        // Create Blob and Trigger Download
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `RELATORIO_LIMPEZA_${new Date().toISOString().slice(0,10)}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
         setIsGeneratingReport(false);
         setSecurityStep('VERIFYING');
         showToast('Relatório gerado. Digite o token para confirmar exclusão.', 'info');
-    }, 1000);
+    }, 1500);
   };
 
   const handleFinalizeDeletion = () => {

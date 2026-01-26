@@ -771,8 +771,8 @@ const App: React.FC = () => {
           </div>
 
           {/* Search Bar & Create Button */}
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-row items-center gap-3 bg-white dark:bg-slate-900 p-2 rounded-3xl border border-slate-200 dark:border-slate-800 sticky top-0 z-20 shadow-sm transition-colors">
+          <div className="flex flex-col gap-3 sticky top-0 z-30">
+            <div className="flex flex-row items-center gap-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm p-2 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
                 <div className="relative flex-1">
                 <input 
                     type="text" 
