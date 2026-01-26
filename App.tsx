@@ -14,13 +14,14 @@ import CreateAlertModal from './components/CreateAlertModal';
 import QRScannerModal from './components/QRScannerModal';
 import TechnicalSheetModal from './components/TechnicalSheetModal';
 import { MOCK_USERS, DEFAULT_USER_PASS } from './constants';
-import { loadOrders, saveOrders } from './services/storageService';
+import { loadOrders, saveOrders, subscribeToChanges } from './services/storageService';
 import { generateTechnicalSheetHtml } from './utils/printHelpers';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false); // Novo estado visual para sync
   
   // Ref para o container principal de scroll
   const mainRef = useRef<HTMLDivElement>(null);
@@ -41,11 +42,24 @@ const App: React.FC = () => {
   
   const [orders, setOrders] = useState<Order[]>([]);
 
-  // Carregamento Inicial via IndexedDB
+  // Carregamento Inicial via IndexedDB e Assinatura de Sincronização
   useEffect(() => {
+    // Carrega dados iniciais
     loadOrders().then((loadedOrders) => {
         setOrders(loadedOrders);
         setIsDataLoaded(true);
+    });
+
+    // Inscreve para receber atualizações de outras abas/janelas (Simulação Backend)
+    subscribeToChanges(() => {
+        setIsSyncing(true);
+        loadOrders().then((updatedOrders) => {
+            setOrders(updatedOrders);
+            // Pequeno delay visual para mostrar que atualizou
+            setTimeout(() => setIsSyncing(false), 800);
+            // Opcional: Mostrar toast discreto
+            // setToast({ show: true, message: 'Dados atualizados remotamente', type: 'info' });
+        });
     });
   }, []);
 
@@ -111,7 +125,7 @@ const App: React.FC = () => {
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return `${year}-W${month}-${day}`;
   };
 
   const formatHeaderTime = (date: Date) => {
@@ -162,9 +176,11 @@ const App: React.FC = () => {
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
+  // Efeito de Salvamento com Persistência
   useEffect(() => {
     if (isDataLoaded) {
-      saveOrders(orders).catch(err => {
+      // Salva e notifica outras abas/instâncias
+      saveOrders(orders, true).catch(err => {
         console.error("Erro fatal ao salvar:", err);
         setToast({ show: true, message: 'ERRO AO SALVAR DADOS. Contate o suporte.', type: 'error' });
       });
@@ -441,7 +457,14 @@ const App: React.FC = () => {
     setOrders(prevOrders => {
       return prevOrders.map(order => {
         if (order.id !== id) return order;
-        const newEntry: HistoryEntry = { userId: currentUser?.id || 'sistema', userName: currentUser?.nome || 'Sistema', timestamp: new Date().toISOString(), status: next, sector: step };
+        // CRITICAL: Ensure History entry has current user details for tracking
+        const newEntry: HistoryEntry = { 
+            userId: currentUser?.id || 'sistema', 
+            userName: currentUser?.nome || 'Sistema', 
+            timestamp: new Date().toISOString(), 
+            status: next, 
+            sector: step 
+        };
         const updatedOrder = { ...order, [step]: next, history: [...(order.history || []), newEntry] };
         
         if (step === 'expedicao' && next === 'Concluído') { 
@@ -687,10 +710,16 @@ const App: React.FC = () => {
 
         {/* Data/Hora - Desktop Only */}
         <div className="flex-1 justify-center hidden md:flex">
-          <div className="px-6 py-1.5 bg-black/20 rounded-full border border-white/5 backdrop-blur-sm">
+          <div className={`px-6 py-1.5 bg-black/20 rounded-full border border-white/5 backdrop-blur-sm flex items-center gap-3 ${isSyncing ? 'animate-pulse ring-1 ring-emerald-400' : ''}`}>
             <span className="text-emerald-400 font-black text-[10px] uppercase tracking-[2px] tabular-nums">
               {formatHeaderTime(currentTime)}
             </span>
+            {isSyncing && (
+                <div className="flex items-center gap-1">
+                    <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></div>
+                    <span className="text-[7px] text-emerald-300 font-bold uppercase tracking-widest">Sincronizando...</span>
+                </div>
+            )}
           </div>
         </div>
 
@@ -723,7 +752,10 @@ const App: React.FC = () => {
           <div className="flex items-center gap-3 md:pl-4 md:border-l border-white/10">
             <div className="hidden md:flex flex-col items-end">
               <span className="text-[11px] font-black text-white uppercase tracking-wider">{currentUser.nome}</span>
-              <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-tight opacity-80">{currentUser.cargo || 'OPERADOR'}</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                  <div className={`w-1.5 h-1.5 rounded-full ${isSyncing ? 'bg-yellow-400 animate-pulse' : 'bg-emerald-400'}`}></div>
+                  <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-tight opacity-80">{currentUser.cargo || 'OPERADOR'}</span>
+              </div>
             </div>
             
             <button onClick={() => setShowOperatorPanel(true)} className="w-10 h-10 bg-white/10 hover:bg-emerald-500 text-white rounded-2xl flex items-center justify-center transition-all shadow-sm border border-white/5">

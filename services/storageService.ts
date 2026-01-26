@@ -5,6 +5,10 @@ import { MOCK_ORDERS } from '../constants';
 const DB_NAME = 'NewcomPCP_DB';
 const STORE_NAME = 'orders';
 const DB_VERSION = 1;
+const SYNC_CHANNEL_NAME = 'newcom_sync_channel';
+
+// Canal de comunicação para simular Backend em Tempo Real (Entre abas/janelas)
+const syncChannel = new BroadcastChannel(SYNC_CHANNEL_NAME);
 
 // Utilitário para abrir o banco
 const openDB = (): Promise<IDBDatabase> => {
@@ -41,8 +45,7 @@ export const loadOrders = async (): Promise<Order[]> => {
                 try {
                     const parsed = JSON.parse(localData);
                     // Salva no DB novo
-                    saveOrders(parsed).then(() => {
-                        // Limpa LocalStorage antigo para liberar memória
+                    saveOrders(parsed, false).then(() => { // false para não gerar loop de sync na carga inicial
                         localStorage.removeItem('pcp_orders');
                     });
                     resolve(parsed);
@@ -52,7 +55,7 @@ export const loadOrders = async (): Promise<Order[]> => {
                 }
             }
             // Se não tem local, retorna Mock inicial e salva
-            saveOrders(MOCK_ORDERS);
+            saveOrders(MOCK_ORDERS, false);
             resolve(MOCK_ORDERS);
         } else {
             resolve(orders);
@@ -67,26 +70,42 @@ export const loadOrders = async (): Promise<Order[]> => {
   }
 };
 
-export const saveOrders = async (orders: Order[]): Promise<void> => {
+// Adicionado parâmetro 'notify' para controlar se deve avisar outras abas
+export const saveOrders = async (orders: Order[], notify: boolean = true): Promise<void> => {
   try {
     const db = await openDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
       
-      // Limpa e reescreve é a estratégia mais segura para garantir sincronia com o React State neste modelo simples
-      // Para apps maiores, faríamos updates pontuais.
+      // Limpa e reescreve para garantir consistência total
       store.clear().onsuccess = () => {
           orders.forEach(order => {
               store.put(order);
           });
       };
 
-      tx.oncomplete = () => resolve();
+      tx.oncomplete = () => {
+          if (notify) {
+              // Avisa outras instâncias que houve mudança (Simulação de Socket/Backend)
+              syncChannel.postMessage({ type: 'DATA_UPDATED', timestamp: Date.now() });
+          }
+          resolve();
+      };
       tx.onerror = () => reject(tx.error);
     });
   } catch (error) {
     console.error("Erro ao salvar ordens:", error);
     throw error;
   }
+};
+
+// Função para ouvir mudanças de outras abas (Backend Simulation)
+export const subscribeToChanges = (callback: () => void) => {
+    syncChannel.onmessage = (event) => {
+        if (event.data.type === 'DATA_UPDATED') {
+            console.log("Recebendo atualização remota...");
+            callback();
+        }
+    };
 };
