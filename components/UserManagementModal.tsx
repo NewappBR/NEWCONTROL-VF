@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef } from 'react';
 import { User, UserRole, DEPARTMENTS, Order, HistoryEntry, CompanySettings, Ramal, GlobalLogEntry } from '../types';
 import { DEFAULT_USER_PASS } from '../constants';
@@ -272,53 +273,123 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
     setGeneratedToken(token);
     
     setTimeout(() => {
-        // --- GERAÇÃO DO HTML DO RELATÓRIO ---
-        const logoImg = companySettings.logoUrl ? `<img src="${companySettings.logoUrl}" style="max-width:80px; max-height:80px;" />` : '';
+        // --- GERAÇÃO DO HTML DO RELATÓRIO MODERNIZADO E AGRUPADO ---
+        const logoImg = companySettings.logoUrl ? `<img src="${companySettings.logoUrl}" style="max-width:80px; max-height:80px; object-fit:contain;" />` : '';
         const today = new Date().toLocaleString('pt-BR');
         
-        // Seção Lista Resumida
-        const tableRows = previewItems.map(item => `
-            <tr>
-                <td style="border:1px solid #ddd; padding:8px; font-weight:bold;">${item.or}</td>
-                <td style="border:1px solid #ddd; padding:8px;">${item.cliente}</td>
-                <td style="border:1px solid #ddd; padding:8px;">${item.item}</td>
-                <td style="border:1px solid #ddd; padding:8px; text-align:right;">${item.dataEntrega.split('-').reverse().join('/')}</td>
-            </tr>
-        `).join('');
+        // 1. Agrupar Itens por OR
+        type GroupedOrder = {
+            or: string;
+            cliente: string;
+            vendedor: string;
+            dataEntrega: string;
+            items: Order[];
+        };
 
-        // Seção Detalhada
-        const detailedSections = previewItems.map((item, idx) => {
-            const historyRows = (item.history || []).map(h => `
-                <tr>
-                    <td style="border-bottom:1px solid #eee; padding:4px;">${new Date(h.timestamp).toLocaleString('pt-BR')}</td>
-                    <td style="border-bottom:1px solid #eee; padding:4px;">${h.userName}</td>
-                    <td style="border-bottom:1px solid #eee; padding:4px;">${h.sector}</td>
-                    <td style="border-bottom:1px solid #eee; padding:4px; font-weight:bold;">${h.status}</td>
-                </tr>
-            `).join('');
+        const groupedMap: Record<string, GroupedOrder> = {};
+        previewItems.forEach(item => {
+            if (!groupedMap[item.or]) {
+                groupedMap[item.or] = {
+                    or: item.or,
+                    cliente: item.cliente,
+                    vendedor: item.vendedor,
+                    dataEntrega: item.dataEntrega,
+                    items: []
+                };
+            }
+            groupedMap[item.or].items.push(item);
+        });
+
+        const groupedList = Object.values(groupedMap).sort((a, b) => a.dataEntrega.localeCompare(b.dataEntrega));
+
+        // 2. Gerar Lista Resumo (1 linha por OR)
+        const summaryRows = groupedList.map((group, idx) => {
+            const totalAttachments = group.items.reduce((acc, i) => acc + (i.attachments?.length || 0), 0);
+            // Pega a data de arquivamento do primeiro item (assumindo que o grupo é arquivado junto)
+            const archiveDate = group.items[0].archivedAt ? new Date(group.items[0].archivedAt).toLocaleDateString('pt-BR') : '-';
 
             return `
-                <div style="page-break-inside:avoid; margin-bottom:30px; border:1px solid #000; padding:15px;">
-                    <h3 style="margin:0; background:#eee; padding:5px 10px; border-bottom:1px solid #000;">#${idx + 1} - O.R ${item.or}</h3>
-                    <div style="padding:10px;">
-                        <p><strong>Cliente:</strong> ${item.cliente}</p>
-                        <p><strong>Item:</strong> ${item.item}</p>
-                        <p><strong>Vendedor:</strong> ${item.vendedor} | <strong>Entrega:</strong> ${item.dataEntrega.split('-').reverse().join('/')}</p>
-                        <p><strong>Criação:</strong> ${item.createdAt ? new Date(item.createdAt).toLocaleString('pt-BR') : 'N/A'}</p>
+            <tr>
+                <td style="padding:12px; text-align:center; font-weight:bold; color:#64748b; border-top: 1px solid #f1f5f9;">#${idx + 1}</td>
+                <td style="padding:12px; font-weight:900; font-size:13px; border-top: 1px solid #f1f5f9;">${group.or}</td>
+                <td style="padding:12px; border-top: 1px solid #f1f5f9; text-transform: uppercase; font-weight:600;">${group.cliente}</td>
+                <td style="padding:12px; border-top: 1px solid #f1f5f9; text-transform: uppercase; font-size:11px;">${group.vendedor}</td>
+                <td style="padding:12px; text-align:center; border-top: 1px solid #f1f5f9;"><span style="background:#f1f5f9; padding:4px 8px; border-radius:6px; font-weight:bold; font-size:11px;">${group.items.length} Itens</span></td>
+                <td style="padding:12px; text-align:center; border-top: 1px solid #f1f5f9;">
+                    ${totalAttachments > 0 ? `<span style="font-size:10px;">📎 ${totalAttachments}</span>` : '<span style="color:#cbd5e1;">-</span>'}
+                </td>
+                <td style="padding:12px; text-align:right; border-top: 1px solid #f1f5f9; font-weight:bold;">${group.dataEntrega.split('-').reverse().join('/')}</td>
+                <td style="padding:12px; text-align:right; border-top: 1px solid #f1f5f9; font-size:11px; color:#64748b;">${archiveDate}</td>
+            </tr>
+        `}).join('');
+
+        // 3. Gerar Seção Detalhada (1 Card por OR, listando itens dentro)
+        const detailedSections = groupedList.map((group, idx) => {
+            
+            // Gerar linhas de itens dentro desta ordem
+            const itemDetailsHtml = group.items.sort((a,b) => (a.numeroItem || '').localeCompare(b.numeroItem || '')).map(item => {
+                
+                const attachCount = item.attachments?.length || 0;
+                const itemArchived = item.archivedAt ? new Date(item.archivedAt).toLocaleString('pt-BR') : '-';
+
+                // Histórico deste item específico
+                const historyRows = (item.history || []).map(h => `
+                    <tr>
+                        <td style="color:#64748b; padding:4px 0; width: 120px;">${new Date(h.timestamp).toLocaleString('pt-BR')}</td>
+                        <td style="font-weight:600; padding:4px 0;">${h.userName}</td>
+                        <td style="padding:4px 0;">${h.sector}</td>
+                        <td style="padding:4px 0; text-align:right;"><span style="background:#fff; border:1px solid #e2e8f0; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:9px; text-transform:uppercase;">${h.status}</span></td>
+                    </tr>
+                `).join('');
+
+                return `
+                    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:15px; margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+                            <div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    ${item.numeroItem ? `<span style="background:#0f172a; color:white; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:bold;">REF: ${item.numeroItem}</span>` : ''}
+                                    <span style="font-size:12px; font-weight:bold; text-transform:uppercase;">${item.item}</span>
+                                </div>
+                                <div style="margin-top:6px; font-size:10px; color:#64748b; display:flex; gap:15px;">
+                                    <span><strong>Vendedor:</strong> ${item.vendedor}</span>
+                                    <span><strong>Arquivado em:</strong> ${itemArchived}</span>
+                                    <span><strong>Anexos:</strong> ${attachCount > 0 ? `Sim (${attachCount})` : 'Não'}</span>
+                                </div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="font-size:9px; font-weight:bold; color:#94a3b8; text-transform:uppercase;">Quantidade</div>
+                                <div style="font-size:14px; font-weight:900; color:#0f172a;">${item.quantidade || '1'}</div>
+                            </div>
+                        </div>
+                        
+                        <div style="border-top:1px dashed #cbd5e1; padding-top:8px;">
+                            <div style="font-size:9px; font-weight:bold; color:#94a3b8; margin-bottom:4px; text-transform:uppercase;">Rastreabilidade do Item</div>
+                            <table style="width:100%; font-size:10px; border-collapse:collapse;">
+                                ${historyRows || '<tr><td colspan="4" style="color:#94a3b8; font-style:italic;">Sem registro.</td></tr>'}
+                            </table>
+                        </div>
                     </div>
-                    <div style="margin-top:10px;">
-                        <h4 style="margin:0 0 5px 0; font-size:12px;">HISTÓRICO DE PRODUÇÃO</h4>
-                        <table style="width:100%; font-size:10px; border-collapse:collapse;">
-                            <thead style="background:#f9f9f9;">
-                                <tr>
-                                    <th style="text-align:left; padding:4px;">Data</th>
-                                    <th style="text-align:left; padding:4px;">User</th>
-                                    <th style="text-align:left; padding:4px;">Setor</th>
-                                    <th style="text-align:left; padding:4px;">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>${historyRows || '<tr><td colspan="4" style="padding:4px; color:#999;">Sem histórico.</td></tr>'}</tbody>
-                        </table>
+                `;
+            }).join('');
+
+            return `
+                <div class="order-group-card" style="page-break-inside:avoid; margin-bottom: 30px; border:1px solid #cbd5e1; border-radius:16px; overflow:hidden;">
+                    <div class="group-header" style="background:#0f172a; color:white; padding:12px 20px; display:flex; justify-content:space-between; align-items:center;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span style="background:#fff; color:#0f172a; padding:2px 8px; border-radius:4px; font-weight:bold; font-size:11px;">#${idx + 1}</span>
+                            <span style="font-size:16px; font-weight:900;">O.R ${group.or}</span>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:9px; font-weight:bold; opacity:0.7;">CLIENTE</div>
+                            <div style="font-size:11px; font-weight:bold;">${group.cliente}</div>
+                        </div>
+                    </div>
+                    <div style="padding:15px; background:#fff;">
+                       <div style="display:flex; justify-content:space-between; margin-bottom:15px; font-size:11px; font-weight:bold; color:#64748b; border-bottom:1px solid #f1f5f9; padding-bottom:10px;">
+                           <span>DATA ENTREGA: ${group.dataEntrega.split('-').reverse().join('/')}</span>
+                           <span>TOTAL DE ITENS: ${group.items.length}</span>
+                       </div>
+                       ${itemDetailsHtml}
                     </div>
                 </div>
             `;
@@ -328,55 +399,78 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Relatório de Exclusão - ${new Date().toISOString().split('T')[0]}</title>
+                <title>Relatório de Limpeza - ${new Date().toISOString().split('T')[0]}</title>
                 <style>
-                    body { font-family: Arial, sans-serif; font-size: 12px; line-height: 1.4; color: #333; margin: 20px; }
-                    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-                    .header h1 { margin: 0; font-size: 18px; text-transform: uppercase; }
-                    .token-box { border: 2px dashed red; padding: 10px; text-align: center; margin: 20px 0; background: #fff0f0; }
-                    .token-code { font-size: 24px; font-weight: bold; letter-spacing: 5px; color: red; }
-                    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                    th { background: #f0f0f0; text-transform: uppercase; font-size: 10px; }
-                    .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #ddd; padding-top: 10px; }
+                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b; margin: 0; padding: 40px; background: #fff; }
+                    .report-container { max-width: 1000px; margin: 0 auto; }
+                    
+                    .header { 
+                        display: flex; justify-content: space-between; align-items: center; 
+                        background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; 
+                        padding: 24px; margin-bottom: 30px; 
+                    }
+                    .header h1 { margin: 0; font-size: 24px; text-transform: uppercase; color: #0f172a; letter-spacing: -0.5px; }
+                    
+                    .token-box { 
+                        border: 2px dashed #fecaca; background: #fef2f2; 
+                        border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 40px; 
+                    }
+                    .token-code { font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #dc2626; margin: 8px 0; }
+
+                    .section-title { font-size: 14px; font-weight: 900; text-transform: uppercase; color: #94a3b8; margin-bottom: 15px; letter-spacing: 1px; padding-left: 5px; }
+
+                    table.summary-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 40px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; font-size: 11px; }
+                    table.summary-table th { background: #f1f5f9; text-transform: uppercase; font-size: 10px; font-weight: 800; color: #475569; padding: 12px; text-align: left; }
+                    table.summary-table td { color: #334155; }
+                    table.summary-table tr:last-child td { border-bottom: none; }
+
+                    .footer { text-align: center; font-size: 10px; color: #94a3b8; margin-top: 60px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
                 </style>
             </head>
             <body>
-                <div class="header">
-                    <div>${logoImg}</div>
-                    <div style="text-align:right;">
-                        <h1>${companySettings.name}</h1>
-                        <p>RELATÓRIO DE ARQUIVAMENTO E LIMPEZA</p>
-                        <p>Data: ${today}</p>
+                <div class="report-container">
+                    <div class="header">
+                        <div>${logoImg}</div>
+                        <div style="text-align:right;">
+                            <h1>${companySettings.name}</h1>
+                            <p>RELATÓRIO DE ARQUIVAMENTO E LIMPEZA</p>
+                            <p style="margin-top:2px; font-size:10px; opacity:0.7;">Gerado em: ${today}</p>
+                        </div>
                     </div>
-                </div>
 
-                <div class="token-box">
-                    <p style="margin:0; font-weight:bold; color:red;">TOKEN DE SEGURANÇA PARA EXCLUSÃO</p>
-                    <div class="token-code">${token}</div>
-                    <p style="margin:5px 0 0 0; font-size:10px;">Use este código para confirmar a exclusão permanente no sistema.</p>
-                </div>
+                    <div class="token-box">
+                        <p style="margin:0; font-weight:bold; color:#ef4444; font-size:12px; text-transform:uppercase; letter-spacing:1px;">Token de Segurança para Exclusão</p>
+                        <div class="token-code">${token}</div>
+                        <p style="margin:5px 0 0 0; font-size:11px; color:#7f1d1d;">Use este código para confirmar a exclusão permanente no sistema.</p>
+                    </div>
 
-                <h2>RESUMO DOS ITENS (${previewItems.length})</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th style="border:1px solid #ddd; padding:8px; text-align:left;">O.R</th>
-                            <th style="border:1px solid #ddd; padding:8px; text-align:left;">CLIENTE</th>
-                            <th style="border:1px solid #ddd; padding:8px; text-align:left;">ITEM</th>
-                            <th style="border:1px solid #ddd; padding:8px; text-align:right;">ENTREGA</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${tableRows}
-                    </tbody>
-                </table>
+                    <div class="section-title">Resumo por Ordem de Serviço (${groupedList.length} Ordens)</div>
+                    <table class="summary-table">
+                        <thead>
+                            <tr>
+                                <th style="text-align:center; width: 40px;">#</th>
+                                <th>O.R</th>
+                                <th>Cliente</th>
+                                <th>Vendedor</th>
+                                <th style="text-align:center;">Qtd Itens</th>
+                                <th style="text-align:center;">Anexos</th>
+                                <th style="text-align:right;">Entrega</th>
+                                <th style="text-align:right;">Arquivado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${summaryRows}
+                        </tbody>
+                    </table>
 
-                <div style="page-break-before: always;"></div>
-                <h2>DETALHAMENTO DE AUDITORIA</h2>
-                ${detailedSections}
+                    <div style="page-break-before: always;"></div>
+                    <div class="section-title">Detalhamento Técnico</div>
+                    ${detailedSections}
 
-                <div class="footer">
-                    Documento gerado pelo sistema NEWCOM CONTROL. A exclusão destes dados é irreversível após confirmação via token.
+                    <div class="footer">
+                        Documento gerado pelo sistema NEWCOM CONTROL. A exclusão destes dados é irreversível após confirmação via token.<br/>
+                        Newcom Control Systems © ${new Date().getFullYear()}
+                    </div>
                 </div>
                 
                 <script>window.onload = function() { window.print(); }</script>
