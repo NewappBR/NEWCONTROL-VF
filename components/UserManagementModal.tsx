@@ -84,7 +84,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
       const totalActive = totalOrders - totalArchived;
       const totalRemakes = filteredOrders.filter(o => o.isRemake).length;
       
-      // 1. Vendor Stats
+      // 1. Vendor Stats (Top 5)
       const vendorCounts: Record<string, { total: number, active: number, remakes: number }> = {};
       filteredOrders.forEach(o => {
           const v = o.vendedor || 'N/A';
@@ -95,7 +95,8 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
       });
       const vendorList = Object.entries(vendorCounts)
           .map(([name, data]) => ({ name, ...data }))
-          .sort((a, b) => b.total - a.total);
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 5);
 
       // 2. Client Stats (Top 5)
       const clientCounts: Record<string, number> = {};
@@ -108,8 +109,17 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
           .sort((a, b) => b.count - a.count)
           .slice(0, 5);
 
-      // 3. Sector Efficiency Stats
-      // Estrutura: Setor -> { user: countCompleted, durations: [] }
+      // 3. Sector Efficiency & Load Stats
+      // Load: Quantidade de itens que NÃO estão 'Concluído' (Pendente ou Em Produção)
+      const sectorLoad = {
+          preImpressao: 0,
+          impressao: 0,
+          producao: 0,
+          instalacao: 0,
+          expedicao: 0
+      };
+
+      // Efficiency: Tempos médios
       const sectorStats: Record<string, { 
           topUser: string; 
           maxCount: number; 
@@ -117,12 +127,20 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
           durations: number[]; // em minutos
       }> = {};
 
-      // Inicializa setores
       Object.keys(DEPARTMENTS).forEach(k => {
           sectorStats[k] = { topUser: '-', maxCount: 0, userCounts: {}, durations: [] };
       });
 
       filteredOrders.forEach(o => {
+          // Calculate Load (Active items only)
+          if (!o.isArchived) {
+              if (o.preImpressao !== 'Concluído') sectorLoad.preImpressao++;
+              if (o.impressao !== 'Concluído') sectorLoad.impressao++;
+              if (o.producao !== 'Concluído') sectorLoad.producao++;
+              if (o.instalacao !== 'Concluído') sectorLoad.instalacao++;
+              if (o.expedicao !== 'Concluído') sectorLoad.expedicao++;
+          }
+
           if (!o.history) return;
           
           // Agrupar histórico por setor para calcular tempos
@@ -183,7 +201,8 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
               topUser: data.topUser,
               topUserCount: data.maxCount,
               avgTime: timeDisplay,
-              avgMinutes // para ordenação de "Gargalo"
+              avgMinutes, // para ordenação de "Gargalo"
+              currentLoad: sectorLoad[key as keyof typeof sectorLoad] || 0
           };
       });
 
@@ -445,6 +464,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
       const sectorRows = stats.sectorPerformance.map((s, i) => `
         <tr>
             <td style="padding:8px; border-bottom:1px solid #eee;">${s.label}</td>
+            <td style="padding:8px; border-bottom:1px solid #eee; text-align:center; font-weight:bold; color: #d97706;">${s.currentLoad}</td>
             <td style="padding:8px; border-bottom:1px solid #eee;"><strong>${s.topUser}</strong> (${s.topUserCount})</td>
             <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">${s.avgTime}</td>
         </tr>
@@ -505,9 +525,24 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 </div>
             </div>
 
+            <h3 style="margin-bottom:15px; font-size:14px; color:#999; border-bottom:1px solid #ccc; margin-top:20px;">Análise por Setor (Gargalos e Eficiência)</h3>
+            <table style="margin-bottom:40px;">
+                <thead>
+                    <tr>
+                        <th>Setor</th>
+                        <th style="text-align:center;">Carga Atual (Itens Pendentes)</th>
+                        <th>Top Operador (Qtd Finalizada)</th>
+                        <th style="text-align:right;">Tempo Médio (Prod -> Conc)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${sectorRows}
+                </tbody>
+            </table>
+
             <div class="grid">
                 <div>
-                    <h3 style="margin-bottom:15px; font-size:14px; color:#999; border-bottom:1px solid #ccc;">Ranking de Vendedores</h3>
+                    <h3 style="margin-bottom:15px; font-size:14px; color:#999; border-bottom:1px solid #ccc;">Top 5 Vendedores</h3>
                     <table>
                         <thead>
                             <tr>
@@ -524,7 +559,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
                     </table>
                 </div>
                 <div>
-                    <h3 style="margin-bottom:15px; font-size:14px; color:#999; border-bottom:1px solid #ccc;">Top Clientes</h3>
+                    <h3 style="margin-bottom:15px; font-size:14px; color:#999; border-bottom:1px solid #ccc;">Top 5 Clientes</h3>
                     <table>
                         <thead>
                             <tr>
@@ -539,20 +574,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
                     </table>
                 </div>
             </div>
-
-            <h3 style="margin-bottom:15px; font-size:14px; color:#999; border-bottom:1px solid #ccc; margin-top:20px;">Produtividade por Setor</h3>
-            <table style="margin-bottom:20px;">
-                <thead>
-                    <tr>
-                        <th>Setor</th>
-                        <th>Top Operador (Qtd)</th>
-                        <th style="text-align:right;">Tempo Médio (Prod -> Conc)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${sectorRows}
-                </tbody>
-            </table>
 
             <div style="margin-top:50px; text-align:center; font-size:10px; color:#999; border-top:1px solid #eee; padding-top:20px;">
                 Relatório gerado automaticamente pelo sistema NEWCOM CONTROL.
@@ -1128,8 +1149,8 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
                                     <thead>
                                         <tr className="border-b border-slate-100 dark:border-slate-800">
                                             <th className="pb-3 text-[9px] font-black text-slate-400 uppercase tracking-wider">Setor</th>
+                                            <th className="pb-3 text-[9px] font-black text-slate-400 uppercase tracking-wider text-center">Carga Atual</th>
                                             <th className="pb-3 text-[9px] font-black text-slate-400 uppercase tracking-wider">Maior Executor</th>
-                                            <th className="pb-3 text-[9px] font-black text-slate-400 uppercase tracking-wider text-right">Qtd.</th>
                                             <th className="pb-3 text-[9px] font-black text-slate-400 uppercase tracking-wider text-right">Tempo Médio</th>
                                         </tr>
                                     </thead>
@@ -1137,8 +1158,8 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
                                         {stats.sectorPerformance.map((s) => (
                                             <tr key={s.key} className="group hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                                 <td className="py-3 text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase">{s.label}</td>
+                                                <td className="py-3 text-[10px] font-black text-amber-500 dark:text-amber-400 text-center tabular-nums">{s.currentLoad}</td>
                                                 <td className="py-3 text-[10px] font-black text-slate-900 dark:text-white uppercase">{s.topUser}</td>
-                                                <td className="py-3 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 text-right tabular-nums">{s.topUserCount > 0 ? s.topUserCount : '-'}</td>
                                                 <td className="py-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 text-right tabular-nums">{s.avgTime}</td>
                                             </tr>
                                         ))}
