@@ -377,7 +377,7 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
       </div>
 
       {/* --- FLOATING CONTROL ISLAND (DESKTOP) --- */}
-      <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 hidden md:block w-auto`}>
+      <div className={`fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 hidden md:block w-auto`}>
           {isToolbarCollapsed ? (
               <button 
                   onClick={() => setIsToolbarCollapsed(false)}
