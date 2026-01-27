@@ -1,6 +1,12 @@
 
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Order, Status, ProductionStep, User, SortConfig, Attachment } from '../types';
+
+export interface ProductionTableHandle {
+  expandAll: () => void;
+  collapseAll: () => void;
+  expandToday: () => void;
+}
 
 interface ProductionTableProps {
   orders: Order[];
@@ -32,7 +38,7 @@ const STEP_LABELS: Record<ProductionStep, string> = {
   Geral: 'GERAL'
 };
 
-const ProductionTable: React.FC<ProductionTableProps> = ({ 
+const ProductionTable = forwardRef<ProductionTableHandle, ProductionTableProps>(({ 
   orders, 
   onUpdateStatus, 
   onEditOrder,
@@ -51,7 +57,7 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
   setActiveTab,
   onScrollTop,
   onShowScanner
-}) => {
+}, ref) => {
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; orderId: string | null; or: string | null }>({ isOpen: false, orderId: null, or: null });
   const [reactivateModal, setReactivateModal] = useState<{ isOpen: boolean; orderId: string | null; or: string | null }>({ isOpen: false, orderId: null, or: null });
   const [shareModal, setShareModal] = useState<{ isOpen: boolean; order: Order | null }>({ isOpen: false, order: null });
@@ -221,11 +227,11 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
           if (hasToday) weeksToOpen.add(w.id);
       });
 
-      if (weeksToOpen.size === 0) {
-          // Fallback visual feedback if needed
-      } else {
+      if (weeksToOpen.size > 0) {
           setExpandedWeeks(weeksToOpen);
           setExpandedOrs(orsToOpen);
+      } else {
+          // Optional: Feedback if no orders today
       }
   };
 
@@ -233,6 +239,13 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
       setExpandedWeeks(new Set());
       setExpandedOrs(new Set());
   };
+
+  // EXPOSE METHODS TO PARENT (App.tsx)
+  useImperativeHandle(ref, () => ({
+    expandAll: handleExpandAll,
+    collapseAll: handleCollapseAll,
+    expandToday: handleExpandCurrentDay
+  }));
 
   const toggleWeek = (groupId: string) => {
     setExpandedWeeks(prev => {
@@ -373,14 +386,7 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
           </div>
       </div>
 
-      {/* --- MOBILE TOOLS SHORTCUTS (Top Aligned) --- */}
-      <div className="md:hidden flex gap-2 px-2 pb-2 overflow-x-auto custom-scrollbar">
-          <button onClick={handleExpandAll} className="bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase whitespace-nowrap">Expandir Tudo</button>
-          <button onClick={handleCollapseAll} className="bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase whitespace-nowrap">Recolher Tudo</button>
-          <button onClick={handleExpandCurrentDay} className="bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase whitespace-nowrap flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Hoje</button>
-      </div>
-
-      {/* --- FLOATING CONTROL ISLAND (DESKTOP) --- */}
+      {/* --- DESKTOP VIEW: FLOATING CONTROL ISLAND --- */}
       <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 hidden md:block w-auto`}>
           {isToolbarCollapsed ? (
               <button 
@@ -458,8 +464,8 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
           )}
       </div>
 
-      {/* --- MOBILE VIEW --- */}
-      <div className="md:hidden space-y-4 pb-4 px-1">
+      {/* --- MOBILE VIEW: LIST --- */}
+      <div className="md:hidden space-y-4 px-1 pb-10">
         {groupedOrders.map((weekGroup) => {
           const isWeekExpanded = expandedWeeks.has(weekGroup.id);
           const totalInWeek = weekGroup.days.reduce((acc, d) => acc + d.orGroups.reduce((oAcc, o) => oAcc + o.items.length, 0), 0);
@@ -590,12 +596,6 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
       </div>
 
       {/* --- DESKTOP VIEW: TABLE --- */}
-      {/* 
-          Sticky Header Fix: 
-          1. Removed overflow-x-auto from main wrapper to let header stick to body scroll.
-          2. Adjusted top position to 62px (Search bar height offset).
-          3. Added bg-white to thead.
-      */}
       <div className="hidden md:block bg-transparent md:bg-white dark:md:bg-slate-900 rounded-[16px] border-none md:border border-slate-200 dark:border-slate-800 md:shadow-lg mb-32 transition-colors w-full pb-48">
         <div className="w-full">
           <table className="w-full text-left border-collapse table-fixed">
@@ -944,6 +944,6 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
       )}
     </>
   );
-};
+});
 
 export default ProductionTable;

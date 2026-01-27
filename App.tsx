@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Order, Status, User, ProductionStep, SortConfig, Notification, HistoryEntry, CompanySettings, GlobalLogEntry, Ramal, DEPARTMENTS } from './types';
-import ProductionTable from './components/ProductionTable';
+import ProductionTable, { ProductionTableHandle } from './components/ProductionTable';
 import Login from './components/Login';
 import QRCodeModal from './components/QRCodeModal';
 import OrderModal from './components/OrderModal';
@@ -32,6 +32,7 @@ const App: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline'>('offline');
   
   const mainRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<ProductionTableHandle>(null);
   
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -519,7 +520,7 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main ref={mainRef} className="flex-1 overflow-auto p-0 md:p-4 pb-32 bg-slate-50/30 dark:bg-slate-900/50">
+      <main ref={mainRef} className="flex-1 overflow-auto p-0 md:p-4 pb-48 md:pb-32 bg-slate-50/30 dark:bg-slate-900/50">
         <div className="w-full max-w-[1450px] mx-auto space-y-4 p-4 md:p-0">
           <div className="flex flex-col md:flex-row justify-between gap-4">
              {/* Stats Cards - Cores Suaves no Modo Claro, Transparência no Modo Escuro */}
@@ -545,6 +546,7 @@ const App: React.FC = () => {
              <CalendarView orders={orders} onEditOrder={(o) => { setEditingOrder(o); setShowOrderModal(true); }} onDateClick={handleCalendarDateClick} />
           ) : (
              <ProductionTable 
+                ref={tableRef}
                 orders={filteredOrders} 
                 onUpdateStatus={handleUpdateStatus} 
                 onEditOrder={(o) => { setEditingOrder(o); setShowOrderModal(true); }}
@@ -568,58 +570,81 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* --- GLOBAL MOBILE NAVIGATION DOCK (FIXED BOTTOM) --- */}
-      <div className="fixed bottom-6 left-4 right-4 z-[900] md:hidden">
-          <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-1.5 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-1">
+      {/* --- UNIFIED MOBILE CONTROL DOCK (2-ROW ISLAND) --- */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[900] md:hidden w-[95%] max-w-[420px]">
+          <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-2 rounded-[24px] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col gap-2">
               
-              {/* Tab: Produção */}
-              <button 
-                  onClick={() => setActiveTab('OPERACIONAL')}
-                  className={`flex-1 py-3 rounded-xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 ${activeTab === 'OPERACIONAL' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-              >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  <span className="text-[8px] font-black uppercase tracking-wide">Produção</span>
-              </button>
+              {/* Row 1: Navigation Tabs */}
+              <div className="flex bg-slate-100 dark:bg-black/40 rounded-xl p-1 h-10 relative">
+                  <button 
+                      onClick={() => setActiveTab('OPERACIONAL')}
+                      className={`flex-1 rounded-lg text-[9px] font-black uppercase transition-all z-10 ${activeTab === 'OPERACIONAL' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-400'}`}
+                  >
+                      Produção
+                  </button>
+                  <button 
+                      onClick={() => setActiveTab('CONCLUÍDAS')}
+                      className={`flex-1 rounded-lg text-[9px] font-black uppercase transition-all z-10 ${activeTab === 'CONCLUÍDAS' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-400'}`}
+                  >
+                      Arquivo
+                  </button>
+                  {/* Sliding Background for Tab */}
+                  <div className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-slate-800 rounded-lg shadow-sm transition-transform duration-300 ${activeTab === 'CONCLUÍDAS' ? 'translate-x-[calc(100%+4px)]' : 'translate-x-0'}`}></div>
+              </div>
 
-              {/* Tab: Arquivo */}
-              <button 
-                  onClick={() => setActiveTab('CONCLUÍDAS')}
-                  className={`flex-1 py-3 rounded-xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 ${activeTab === 'CONCLUÍDAS' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-              >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  <span className="text-[8px] font-black uppercase tracking-wide">Arquivo</span>
-              </button>
+              {/* Row 2: Tools & Actions & QR */}
+              <div className="flex justify-between items-end px-1 pb-1 relative">
+                  
+                  {/* Left Group: Tools */}
+                  <div className="flex gap-2">
+                      <button 
+                          onClick={() => tableRef.current?.expandAll()} 
+                          className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 flex items-center justify-center active:scale-90 transition-transform"
+                          title="Expandir Tudo"
+                      >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 13l-7 7-7-7m14-8l-7 7-7-7" strokeWidth="2"/></svg>
+                      </button>
+                      <button 
+                          onClick={() => tableRef.current?.collapseAll()} 
+                          className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 flex items-center justify-center active:scale-90 transition-transform"
+                          title="Recolher Tudo"
+                      >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 15l7-7 7 7" strokeWidth="2"/></svg>
+                      </button>
+                  </div>
 
-              {/* Central QR Button - Floating */}
-              <button 
-                  onClick={() => setShowScanner(true)}
-                  className="w-14 h-14 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full flex items-center justify-center shadow-xl border-4 border-white dark:border-slate-950 -mt-8 active:scale-90 transition-transform shrink-0 z-10"
-              >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM6 8v4h4V8H6zm14 10.5c0 .276-.224.5-.5.5h-3a.5.5 0 01-.5-.5v-3a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3z" strokeWidth="2"/></svg>
-              </button>
+                  {/* Center: QR Code (Popped Out) */}
+                  <div className="absolute left-1/2 -translate-x-1/2 -bottom-1">
+                      <button 
+                          onClick={() => setShowScanner(true)}
+                          className="w-16 h-16 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full flex items-center justify-center shadow-lg border-4 border-white dark:border-slate-900 active:scale-90 transition-transform"
+                      >
+                          <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM6 8v4h4V8H6zm14 10.5c0 .276-.224.5-.5.5h-3a.5.5 0 01-.5-.5v-3a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3z" strokeWidth="2"/></svg>
+                      </button>
+                  </div>
 
-              {/* Button: Nova O.R */}
-              <button 
-                  onClick={handleCreateNewOrder}
-                  className="flex-1 py-3 rounded-xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 text-slate-400 hover:text-emerald-600 hover:bg-slate-50 dark:hover:bg-slate-800"
-              >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  <span className="text-[8px] font-black uppercase tracking-wide">Novo</span>
-              </button>
-              
-              {/* Button: Menu/Opções */}
-              <button 
-                  onClick={() => setShowOperatorPanel(true)}
-                  className="flex-1 py-3 rounded-xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800"
-              >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  <span className="text-[8px] font-black uppercase tracking-wide">Menu</span>
-              </button>
+                  {/* Right Group: Actions */}
+                  <div className="flex gap-2">
+                      <button 
+                          onClick={handleCreateNewOrder}
+                          className="w-10 h-10 rounded-xl bg-emerald-500 text-white shadow-md shadow-emerald-500/30 flex items-center justify-center active:scale-90 transition-transform"
+                          title="Nova Ordem"
+                      >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      </button>
+                      <button 
+                          onClick={() => setShowOperatorPanel(true)}
+                          className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center active:scale-90 transition-transform"
+                          title="Menu"
+                      >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      </button>
+                  </div>
+              </div>
           </div>
       </div>
 
       {/* --- FLOATING CONTROL ISLAND (DESKTOP) --- */}
-      {/* Moved from bottom-24 to bottom-6 for desktop */}
       <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 hidden md:block w-auto`}>
           {isToolbarCollapsed ? (
               <button 
