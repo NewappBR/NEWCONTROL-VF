@@ -60,12 +60,8 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
   const [expandedOrs, setExpandedOrs] = useState<Set<string>>(new Set());
   
-  // Estado para ferramentas extras no mobile (true = escondido)
-  const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
   // Estado para desktop (true = colapsado)
   const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
-
-  const toolsContainerRef = useRef<HTMLDivElement>(null);
 
   const stepsList: ProductionStep[] = ['preImpressao', 'impressao', 'producao', 'instalacao', 'expedicao'];
 
@@ -226,12 +222,11 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
       });
 
       if (weeksToOpen.size === 0) {
-          alert("Nenhuma ordem encontrada para hoje.");
-          return;
+          // Fallback visual feedback if needed
+      } else {
+          setExpandedWeeks(weeksToOpen);
+          setExpandedOrs(orsToOpen);
       }
-
-      setExpandedWeeks(weeksToOpen);
-      setExpandedOrs(orsToOpen);
   };
 
   const handleCollapseAll = () => {
@@ -378,8 +373,15 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
           </div>
       </div>
 
+      {/* --- MOBILE TOOLS SHORTCUTS (Top Aligned) --- */}
+      <div className="md:hidden flex gap-2 px-2 pb-2 overflow-x-auto custom-scrollbar">
+          <button onClick={handleExpandAll} className="bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase whitespace-nowrap">Expandir Tudo</button>
+          <button onClick={handleCollapseAll} className="bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase whitespace-nowrap">Recolher Tudo</button>
+          <button onClick={handleExpandCurrentDay} className="bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase whitespace-nowrap flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Hoje</button>
+      </div>
+
       {/* --- FLOATING CONTROL ISLAND (DESKTOP) --- */}
-      <div className={`fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 hidden md:block w-auto`}>
+      <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 hidden md:block w-auto`}>
           {isToolbarCollapsed ? (
               <button 
                   onClick={() => setIsToolbarCollapsed(false)}
@@ -456,66 +458,8 @@ const ProductionTable: React.FC<ProductionTableProps> = ({
           )}
       </div>
 
-      {/* --- MOBILE NAVIGATION BOTTOM DOCK --- */}
-      <div className="fixed bottom-4 left-4 right-4 z-50 md:hidden flex flex-col gap-2 pointer-events-none">
-          
-          {/* Menu de Ferramentas (Expansível) */}
-          {isMobileToolsOpen && (
-              <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-3 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 grid grid-cols-4 gap-2 animate-in slide-in-from-bottom-5 pointer-events-auto">
-                  <ToolIcon onClick={handleExpandAll} icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 13l-7 7-7-7m14-8l-7 7-7-7" strokeWidth="2"/></svg>} title="Expandir" />
-                  <ToolIcon onClick={handleCollapseAll} icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 15l7-7 7 7" strokeWidth="2"/></svg>} title="Recolher" />
-                  <ToolIcon onClick={handleExpandCurrentDay} icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v.01" /><circle cx="12" cy="15" r="1" /></svg>} title="Hoje" />
-                  <ToolIcon onClick={onScrollTop} icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 10l7-7m0 0l7 7m-7-7v18" strokeWidth="2"/></svg>} title="Topo" />
-                  <button 
-                      onClick={onCreateOrder}
-                      className="col-span-4 py-3 rounded-xl bg-[#064e3b] dark:bg-emerald-600 text-white flex items-center justify-center shadow-md active:scale-95 gap-2"
-                  >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5"/></svg>
-                      <span className="text-[10px] font-black uppercase tracking-widest">Nova Ordem</span>
-                  </button>
-              </div>
-          )}
-
-          {/* Barra de Navegação Principal */}
-          <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-1.5 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-1 pointer-events-auto">
-              {/* Tab: Produção */}
-              <button 
-                  onClick={() => setActiveTab?.('OPERACIONAL')}
-                  className={`flex-1 py-3 rounded-xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 ${activeTab === 'OPERACIONAL' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-              >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  <span className="text-[9px] font-black uppercase tracking-wide">Produção</span>
-              </button>
-
-              {/* Central QR Button */}
-              <button 
-                  onClick={onShowScanner}
-                  className="w-14 h-14 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full flex items-center justify-center shadow-lg border-4 border-slate-50 dark:border-slate-950 -mt-8 active:scale-90 transition-transform"
-              >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM6 8v4h4V8H6zm14 10.5c0 .276-.224.5-.5.5h-3a.5.5 0 01-.5-.5v-3a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3z" strokeWidth="2"/></svg>
-              </button>
-
-              {/* Tab: Arquivo */}
-              <button 
-                  onClick={() => setActiveTab?.('CONCLUÍDAS')}
-                  className={`flex-1 py-3 rounded-xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 ${activeTab === 'CONCLUÍDAS' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-              >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  <span className="text-[9px] font-black uppercase tracking-wide">Arquivo</span>
-              </button>
-              
-              {/* Tools Toggle */}
-              <button 
-                  onClick={() => setIsMobileToolsOpen(!isMobileToolsOpen)}
-                  className={`p-3 rounded-xl transition-all active:scale-95 ${isMobileToolsOpen ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white' : 'text-slate-300'}`}
-              >
-                  <svg className={`w-5 h-5 transform transition-transform ${isMobileToolsOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 15l7-7 7 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
-          </div>
-      </div>
-
       {/* --- MOBILE VIEW --- */}
-      <div className="md:hidden space-y-4 pb-44 px-1">
+      <div className="md:hidden space-y-4 pb-4 px-1">
         {groupedOrders.map((weekGroup) => {
           const isWeekExpanded = expandedWeeks.has(weekGroup.id);
           const totalInWeek = weekGroup.days.reduce((acc, d) => acc + d.orGroups.reduce((oAcc, o) => oAcc + o.items.length, 0), 0);
