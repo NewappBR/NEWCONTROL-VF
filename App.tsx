@@ -607,11 +607,11 @@ const App: React.FC = () => {
                     <div className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-slate-800 rounded-lg shadow-sm transition-transform duration-300 ${activeTab === 'CONCLUÍDAS' ? 'translate-x-[calc(100%+4px)]' : 'translate-x-0'}`}></div>
                 </div>
 
-                {/* Row 2: Tools & Actions & QR */}
-                <div className="flex justify-between items-end px-1 pb-1 relative">
+                {/* Row 2: Tools & Actions & QR - FIXED LAYOUT FOR NO OVERLAP */}
+                <div className="flex justify-between items-end px-1 pb-1 relative h-16">
                     
-                    {/* Left Group: Tools (Expand/Collapse/Today/ScrollTop) - Horizontal Scroll */}
-                    <div className="flex gap-2 overflow-x-auto custom-scrollbar max-w-[45%]">
+                    {/* Left Group: Tools (Fixed width calculated to avoid center) */}
+                    <div className="flex gap-2 overflow-x-auto custom-scrollbar w-[calc(50%-35px)] pr-2 items-center h-full">
                         <button 
                             onClick={() => tableRef.current?.expandAll()} 
                             className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 flex items-center justify-center active:scale-90 transition-transform shrink-0"
@@ -656,8 +656,8 @@ const App: React.FC = () => {
                         </button>
                     </div>
 
-                    {/* Center: QR Code (Popped Out) */}
-                    <div className="absolute left-1/2 -translate-x-1/2 -bottom-1">
+                    {/* Center: QR Code (Popped Out - Absolute Center) */}
+                    <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 z-20">
                         <button 
                             onClick={() => setShowScanner(true)}
                             className="w-16 h-16 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full flex items-center justify-center shadow-lg border-4 border-white dark:border-slate-900 active:scale-90 transition-transform"
@@ -666,18 +666,18 @@ const App: React.FC = () => {
                         </button>
                     </div>
 
-                    {/* Right Group: Actions */}
-                    <div className="flex gap-2">
+                    {/* Right Group: Actions (Fixed width calculated) */}
+                    <div className="flex gap-2 w-[calc(50%-35px)] justify-end items-center h-full pl-2">
                         <button 
                             onClick={handleCreateNewOrder}
-                            className="w-10 h-10 rounded-xl bg-emerald-500 text-white shadow-md shadow-emerald-500/30 flex items-center justify-center active:scale-90 transition-transform"
+                            className="w-10 h-10 rounded-xl bg-emerald-500 text-white shadow-md shadow-emerald-500/30 flex items-center justify-center active:scale-90 transition-transform shrink-0"
                             title="Nova Ordem"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                         </button>
                         <button 
                             onClick={() => setShowOperatorPanel(true)}
-                            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center active:scale-90 transition-transform"
+                            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
                             title="Menu"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>

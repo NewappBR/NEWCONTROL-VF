@@ -66,6 +66,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
       return date.toISOString().split('T')[0];
   });
   const [reportEndDate, setReportEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [isReportFilterCollapsed, setIsReportFilterCollapsed] = useState(false); // NEW: Collapsible state
 
   const [localSettings, setLocalSettings] = useState<CompanySettings>(companySettings);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -685,7 +686,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
                                 </div>
                             </div>
                             <div style="text-align:right;">
-                                <div style="font-size:9px; font-weight:bold; color:#94a3b8; text-transform:uppercase;">Quantidade</div>
+                                <div style="font-size:9px; font-weight:bold; color:#999; text-transform:uppercase;">Quantidade</div>
                                 <div style="font-size:14px; font-weight:900; color:#0f172a;">${item.quantidade || '1'}</div>
                             </div>
                         </div>
@@ -1030,37 +1031,60 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 <div className="max-w-6xl mx-auto space-y-6 pb-20 animate-in fade-in h-full flex flex-col">
                     
                     {/* Header de Filtro do Relatório */}
-                    <div className="bg-white dark:bg-slate-900 p-4 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row gap-4 items-end md:items-center justify-between shrink-0">
+                    <div className="bg-white dark:bg-slate-900 p-4 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row gap-4 items-end md:items-center justify-between shrink-0 relative transition-all">
+                        
+                        {/* Toggle Collapse Button (Mobile Only) */}
+                        <button 
+                            onClick={() => setIsReportFilterCollapsed(!isReportFilterCollapsed)}
+                            className="md:hidden absolute top-2 right-2 p-2.5 text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-full shadow-sm hover:bg-emerald-500 hover:text-white transition-all z-20 active:scale-95"
+                        >
+                            <svg className={`w-4 h-4 transform transition-transform ${isReportFilterCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 15l7-7 7 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        </button>
+
                         <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
-                            <div className="space-y-1 w-full md:w-40">
-                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1">Início</label>
-                                <input 
-                                    type="date"
-                                    value={reportStartDate}
-                                    onChange={e => setReportStartDate(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-white outline-none focus:ring-2 ring-emerald-500"
-                                />
-                            </div>
-                            <div className="space-y-1 w-full md:w-40">
-                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1">Fim</label>
-                                <input 
-                                    type="date"
-                                    value={reportEndDate}
-                                    onChange={e => setReportEndDate(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-white outline-none focus:ring-2 ring-emerald-500"
-                                />
-                            </div>
+                            {!isReportFilterCollapsed ? (
+                                <>
+                                    <div className="space-y-1 w-full md:w-40 animate-in fade-in slide-in-from-top-2">
+                                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1">Início</label>
+                                        <input 
+                                            type="date"
+                                            value={reportStartDate}
+                                            onChange={e => setReportStartDate(e.target.value)}
+                                            className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-white outline-none focus:ring-2 ring-emerald-500"
+                                        />
+                                    </div>
+                                    <div className="space-y-1 w-full md:w-40 animate-in fade-in slide-in-from-top-2">
+                                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1">Fim</label>
+                                        <input 
+                                            type="date"
+                                            value={reportEndDate}
+                                            onChange={e => setReportEndDate(e.target.value)}
+                                            className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-white outline-none focus:ring-2 ring-emerald-500"
+                                        />
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="py-2">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Período Selecionado</span>
+                                    <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 uppercase">
+                                        {reportStartDate.split('-').reverse().join('/')} A {reportEndDate.split('-').reverse().join('/')}
+                                    </span>
+                                </div>
+                            )}
                         </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase hidden md:block">Analíticos Gerenciais</span>
-                            <button 
-                                onClick={handlePrintSystemReport}
-                                className="px-6 py-2.5 bg-slate-900 dark:bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg hover:bg-slate-700 dark:hover:bg-emerald-500 transition-all flex items-center gap-2 active:scale-95"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" strokeWidth="2.5"/></svg>
-                                Imprimir
-                            </button>
-                        </div>
+                        
+                        {!isReportFilterCollapsed && (
+                            <div className="flex items-center gap-2 animate-in fade-in">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase hidden md:block">Analíticos Gerenciais</span>
+                                <button 
+                                    onClick={handlePrintSystemReport}
+                                    className="w-full md:w-auto px-6 py-2.5 bg-slate-900 dark:bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg hover:bg-slate-700 dark:hover:bg-emerald-500 transition-all flex items-center justify-center gap-2 active:scale-95"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" strokeWidth="2.5"/></svg>
+                                    Imprimir
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6">
@@ -1222,7 +1246,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
                           </div>
                       </div>
                     ))}
-                </div>
+                 </div>
               </div>
             ) : activeTab === 'CONFIGURAÇÕES' ? (
               <div className="max-w-4xl mx-auto space-y-6 md:space-y-8 animate-in slide-in-from-bottom-8 duration-500 pb-10">
