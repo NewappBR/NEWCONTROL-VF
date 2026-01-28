@@ -84,9 +84,15 @@ const ProductionTable = forwardRef<ProductionTableHandle, ProductionTableProps>(
       } else {
           setActiveSectorFilter(step); // Ativa novo filtro
           // Expande tudo automaticamente para facilitar a visualização dos resultados
-          setTimeout(() => handleExpandOrderMode(), 100);
       }
   };
+
+  // Efeito para expandir visualização ao ativar filtro
+  useEffect(() => {
+      if (activeSectorFilter) {
+          handleExpandOrderMode();
+      }
+  }, [activeSectorFilter]);
 
   // Agrupamento de Ordens
   const groupedOrders = useMemo(() => {
