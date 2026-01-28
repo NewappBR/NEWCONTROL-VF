@@ -104,7 +104,10 @@ const App: React.FC = () => {
   const [showScanner, setShowScanner] = useState(false);
   const [showTechSheetModal, setShowTechSheetModal] = useState<Order | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'dataEntrega', direction: 'asc' });
-  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
+  
+  // Collapse States
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false); // Desktop
+  const [isMobileDockCollapsed, setIsMobileDockCollapsed] = useState(false); // Mobile
 
   const [manualNotifications, setManualNotifications] = useState<Notification[]>([]);
   const [systemNotifications, setSystemNotifications] = useState<Notification[]>([]);
@@ -586,106 +589,132 @@ const App: React.FC = () => {
 
       {/* --- UNIFIED MOBILE CONTROL DOCK (2-ROW ISLAND) --- */}
       {!isAnyModalOpen && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[800] md:hidden w-[95%] max-w-[420px] animate-in slide-in-from-bottom-6 duration-300">
-            <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-2 rounded-[24px] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col gap-2">
-                
-                {/* Row 1: Navigation Tabs */}
-                <div className="flex bg-slate-100 dark:bg-black/40 rounded-xl p-1 h-10 relative">
+        <>
+            {/* FLOATING COLLAPSED BUTTON (Mobile) */}
+            {isMobileDockCollapsed && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[800] md:hidden animate-in slide-in-from-bottom-4">
                     <button 
-                        onClick={() => setActiveTab('OPERACIONAL')}
-                        className={`flex-1 rounded-lg text-[9px] font-black uppercase transition-all z-10 ${activeTab === 'OPERACIONAL' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-400'}`}
+                        onClick={() => setIsMobileDockCollapsed(false)}
+                        className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl px-8 py-3 rounded-full shadow-2xl border-2 border-slate-100 dark:border-slate-800 flex items-center gap-3 active:scale-95 transition-all"
                     >
-                        Produção
+                        <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-300 tracking-widest">ABRIR MENU</span>
+                        <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 15l7-7 7 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </button>
-                    <button 
-                        onClick={() => setActiveTab('CONCLUÍDAS')}
-                        className={`flex-1 rounded-lg text-[9px] font-black uppercase transition-all z-10 ${activeTab === 'CONCLUÍDAS' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-400'}`}
-                    >
-                        Arquivo
-                    </button>
-                    {/* Sliding Background for Tab */}
-                    <div className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-slate-800 rounded-lg shadow-sm transition-transform duration-300 ${activeTab === 'CONCLUÍDAS' ? 'translate-x-[calc(100%+4px)]' : 'translate-x-0'}`}></div>
                 </div>
+            )}
 
-                {/* Row 2: Tools & Actions & QR - FIXED LAYOUT FOR NO OVERLAP */}
-                <div className="flex justify-between items-end px-1 pb-1 relative h-16">
-                    
-                    {/* Left Group: Tools (Fixed width calculated to avoid center) */}
-                    <div className="flex gap-2 overflow-x-auto custom-scrollbar w-[calc(50%-35px)] pr-2 items-center h-full">
+            {/* FULL DOCK (Mobile) */}
+            {!isMobileDockCollapsed && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[800] md:hidden w-[95%] max-w-[420px] animate-in slide-in-from-bottom-6 duration-300">
+                    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-2 rounded-[24px] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col gap-2 relative">
+                        
+                        {/* Collapse Handle */}
                         <button 
-                            onClick={() => tableRef.current?.expandAll()} 
-                            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 flex items-center justify-center active:scale-90 transition-transform shrink-0"
-                            title="Expandir Tudo"
+                            onClick={() => setIsMobileDockCollapsed(true)}
+                            className="absolute -top-3 left-1/2 -translate-x-1/2 w-10 h-6 bg-white dark:bg-slate-900 rounded-t-lg shadow-sm border-t border-x border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors"
                         >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 13l-7 7-7-7m14-8l-7 7-7-7" strokeWidth="2"/></svg>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                         </button>
-                        <button 
-                            onClick={() => tableRef.current?.collapseAll()} 
-                            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
-                            title="Recolher Tudo"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 15l7-7 7 7" strokeWidth="2"/></svg>
-                        </button>
-                        <button 
-                            onClick={() => tableRef.current?.expandToday()} 
-                            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-amber-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
-                            title="Foco Hoje"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        </button>
-                        <button 
-                            onClick={() => handleScrollToTop()} 
-                            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
-                            title="Topo"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 10l7-7m0 0l7 7m-7-7v18" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                        </button>
-                        <button 
-                            onClick={() => tableRef.current?.expandWeeks()} 
-                            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 flex items-center justify-center active:scale-90 transition-transform shrink-0 font-black text-[9px]"
-                            title="Modo Semana"
-                        >
-                            SEM
-                        </button>
-                        <button 
-                            onClick={() => tableRef.current?.expandOrders()} 
-                            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 flex items-center justify-center active:scale-90 transition-transform shrink-0 font-black text-[9px]"
-                            title="Modo Ordens"
-                        >
-                            ORD
-                        </button>
-                    </div>
 
-                    {/* Center: QR Code (Popped Out - Absolute Center) */}
-                    <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 z-20">
-                        <button 
-                            onClick={() => setShowScanner(true)}
-                            className="w-16 h-16 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full flex items-center justify-center shadow-lg border-4 border-white dark:border-slate-900 active:scale-90 transition-transform"
-                        >
-                            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM6 8v4h4V8H6zm14 10.5c0 .276-.224.5-.5.5h-3a.5.5 0 01-.5-.5v-3a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3z" strokeWidth="2"/></svg>
-                        </button>
-                    </div>
+                        {/* Row 1: Navigation Tabs */}
+                        <div className="flex bg-slate-100 dark:bg-black/40 rounded-xl p-1 h-10 relative">
+                            <button 
+                                onClick={() => setActiveTab('OPERACIONAL')}
+                                className={`flex-1 rounded-lg text-[9px] font-black uppercase transition-all z-10 ${activeTab === 'OPERACIONAL' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-400'}`}
+                            >
+                                Produção
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('CONCLUÍDAS')}
+                                className={`flex-1 rounded-lg text-[9px] font-black uppercase transition-all z-10 ${activeTab === 'CONCLUÍDAS' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-400'}`}
+                            >
+                                Arquivo
+                            </button>
+                            {/* Sliding Background for Tab */}
+                            <div className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-slate-800 rounded-lg shadow-sm transition-transform duration-300 ${activeTab === 'CONCLUÍDAS' ? 'translate-x-[calc(100%+4px)]' : 'translate-x-0'}`}></div>
+                        </div>
 
-                    {/* Right Group: Actions (Fixed width calculated) */}
-                    <div className="flex gap-2 w-[calc(50%-35px)] justify-end items-center h-full pl-2">
-                        <button 
-                            onClick={handleCreateNewOrder}
-                            className="w-10 h-10 rounded-xl bg-emerald-500 text-white shadow-md shadow-emerald-500/30 flex items-center justify-center active:scale-90 transition-transform shrink-0"
-                            title="Nova Ordem"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                        </button>
-                        <button 
-                            onClick={() => setShowOperatorPanel(true)}
-                            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
-                            title="Menu"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                        </button>
+                        {/* Row 2: Tools & Actions & QR - FIXED LAYOUT FOR NO OVERLAP */}
+                        <div className="flex justify-between items-end px-1 pb-1 relative h-16">
+                            
+                            {/* Left Group: View Tools (Calculated width to avoid center QR) */}
+                            <div className="flex gap-2 overflow-x-auto custom-scrollbar w-[calc(50%-42px)] pr-1 items-center h-full justify-start mask-linear-fade-right">
+                                <button 
+                                    onClick={() => tableRef.current?.expandAll()} 
+                                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 flex items-center justify-center active:scale-90 transition-transform shrink-0"
+                                    title="Expandir Tudo"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" strokeWidth="2"/></svg>
+                                </button>
+                                <button 
+                                    onClick={() => tableRef.current?.collapseAll()} 
+                                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
+                                    title="Recolher Tudo"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v16h16V4H4z" strokeWidth="2"/><path d="M9 9l6 6m0-6l-6 6" strokeWidth="2"/></svg>
+                                </button>
+                                <button 
+                                    onClick={() => tableRef.current?.expandToday()} 
+                                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-amber-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
+                                    title="Foco Hoje"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                </button>
+                                <button 
+                                    onClick={() => handleScrollToTop()} 
+                                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
+                                    title="Topo"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 10l7-7m0 0l7 7m-7-7v18" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                </button>
+                            </div>
+
+                            {/* Center: QR Code (Popped Out - Absolute Center) */}
+                            <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 z-20">
+                                <button 
+                                    onClick={() => setShowScanner(true)}
+                                    className="w-16 h-16 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full flex items-center justify-center shadow-lg border-4 border-white dark:border-slate-900 active:scale-90 transition-transform"
+                                >
+                                    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM6 8v4h4V8H6zm14 10.5c0 .276-.224.5-.5.5h-3a.5.5 0 01-.5-.5v-3a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3z" strokeWidth="2"/></svg>
+                                </button>
+                            </div>
+
+                            {/* Right Group: Modes & Actions (Calculated width) */}
+                            <div className="flex gap-2 overflow-x-auto custom-scrollbar w-[calc(50%-42px)] pl-1 items-center h-full justify-end mask-linear-fade-left">
+                                <button 
+                                    onClick={() => tableRef.current?.expandWeeks()} 
+                                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 flex items-center justify-center active:scale-90 transition-transform shrink-0 font-black text-[9px]"
+                                    title="Modo Semana"
+                                >
+                                    SEM
+                                </button>
+                                <button 
+                                    onClick={() => tableRef.current?.expandOrders()} 
+                                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 flex items-center justify-center active:scale-90 transition-transform shrink-0 font-black text-[9px]"
+                                    title="Modo Ordens"
+                                >
+                                    ORD
+                                </button>
+                                <button 
+                                    onClick={handleCreateNewOrder}
+                                    className="w-10 h-10 rounded-full bg-emerald-500 text-white shadow-md shadow-emerald-500/30 flex items-center justify-center active:scale-90 transition-transform shrink-0"
+                                    title="Nova Ordem"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                </button>
+                                <button 
+                                    onClick={() => setShowOperatorPanel(true)}
+                                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
+                                    title="Menu"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            )}
+        </>
       )}
 
       {/* --- FLOATING CONTROL ISLAND (DESKTOP) --- */}
