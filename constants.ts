@@ -1,5 +1,5 @@
 
-import { Order, User } from './types';
+import { Order, User, Status } from './types';
 
 export const DEFAULT_ADMIN_LOGIN = 'adm';
 export const DEFAULT_ADMIN_PASS = '@dm123';
@@ -16,87 +16,94 @@ export const MOCK_USERS: User[] = [
   { id: 'admin-id', nome: 'ADMINISTRADOR', email: 'adm', role: 'Admin', cargo: 'DIRETORIA', departamento: 'Geral', password: DEFAULT_ADMIN_PASS },
   { id: 'u2', nome: 'CARLOS ARTE', email: 'arte', role: 'Operador', cargo: 'DESIGNER', departamento: 'preImpressao', password: DEFAULT_USER_PASS },
   { id: 'u3', nome: 'JOÃO PRINT', email: 'print', role: 'Operador', cargo: 'IMPRESSOR', departamento: 'impressao', password: DEFAULT_USER_PASS },
-  { id: 'u4', nome: 'MARCOS SERRALHEIRO', email: 'producao', role: 'Operador', cargo: 'METALÚRGICO', departamento: 'producao', password: DEFAULT_USER_PASS }
+  { id: 'u4', nome: 'MARCOS SERRALHEIRO', email: 'producao', role: 'Operador', cargo: 'METALÚRGICO', departamento: 'producao', password: DEFAULT_USER_PASS },
+  { id: 'u5', nome: 'EQUIPE INSTALA', email: 'instala', role: 'Operador', cargo: 'INSTALADOR', departamento: 'instalacao', password: DEFAULT_USER_PASS }
 ];
 
-export const VENDORS = ['ALINE', 'LARA', 'CADU', 'AUGUSTO', 'HÉLIO', 'RODOLFO'];
+export const VENDORS = ['ALINE', 'LARA', 'CADU', 'AUGUSTO', 'HÉLIO', 'RODOLFO', 'MARIANA'];
+const CLIENTS = ['REDE GRAAL', 'BANCO ITAU', 'POSTO SHELL', 'FARMÁCIA VIDA', 'MERCADO MUNICIPAL', 'SHOPPING LINS', 'RESTAURANTE SABOR', 'CONSTRUTORA TENDA', 'ACADEMIA SMART', 'PREFEITURA MUNICIPAL', 'PADARIA CENTRAL', 'CLÍNICA SAÚDE'];
+const ITEMS = [
+    'LUMINOSO BACKLIGHT 3X1M', 'ADESIVOS DE BOMBA (KIT)', 'PAINEL ACM 12X3M + LETRA', 'CARDÁPIO EM PS 2MM UV', 
+    'FAIXA DE GÔNDOLA PVC', 'BANNER LONA 440G', 'ADESIVO JATEADO VIDRO', 'TOTEM SINALIZAÇÃO MDF', 
+    'PLACA DE OBRA 2X1M', 'ENVELOPAMENTO DE FROTA', 'LETRA CAIXA INOX', 'SINALIZAÇÃO DE EMERGÊNCIA'
+];
 
-// Helper para gerar datas relativas
+// Helper para gerar datas
 const getDate = (offsetDays: number) => {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
   return d.toISOString().split('T')[0];
 };
 
-const today = getDate(0);
-const yesterday = getDate(-1);
-const tomorrow = getDate(1);
+const generateMockOrders = (): Order[] => {
+    const orders: Order[] = [];
+    let orCounter = 112000;
 
-export const MOCK_ORDERS: Order[] = [
-  // --- ATRASADAS ---
-  {
-    id: '1', or: '112010', numeroItem: '01', lote: '01', versao: 'V1', cliente: 'REDE GRAAL', vendedor: 'ALINE', item: 'LUMINOSO BACKLIGHT 3X1M - RESTAURANTE',
-    dataEntrega: getDate(-5), createdAt: getDate(-10), preImpressao: 'Concluído', impressao: 'Concluído', producao: 'Em Produção', instalacao: 'Pendente', expedicao: 'Pendente',
-    observacao: 'ATRASADO - PRIORIDADE MÁXIMA', prioridade: 'Alta', history: [], isArchived: false
-  },
-  {
-    id: '2', or: '112011', numeroItem: 'A-02', lote: '01', versao: 'V2', cliente: 'POSTO SHELL', vendedor: 'AUGUSTO', item: 'ADESIVOS DE BOMBA (KIT COMPLETO)',
-    dataEntrega: getDate(-2), createdAt: getDate(-8), preImpressao: 'Concluído', impressao: 'Em Produção', producao: 'Pendente', instalacao: 'Pendente', expedicao: 'Pendente',
-    observacao: '', prioridade: 'Média', history: [], isArchived: false
-  },
+    // Gerar 60 ordens distribuídas em -30 dias a +30 dias
+    for (let i = -30; i <= 30; i++) {
+        // Pula alguns dias para dar realismo (nem todo dia tem entrega)
+        if (Math.random() > 0.7) continue;
 
-  // --- HOJE ---
-  {
-    id: '3', or: '112014', numeroItem: '001', lote: '01', versao: 'V1', cliente: 'SHOPPING LINS - FACHADA', vendedor: 'ALINE', item: 'PAINEL ACM 12X3M + LETRA CAIXA',
-    dataEntrega: today, createdAt: getDate(-3), preImpressao: 'Concluído', impressao: 'Concluído', producao: 'Em Produção', instalacao: 'Pendente', expedicao: 'Pendente',
-    observacao: 'USAR LED 6500K', prioridade: 'Alta', history: [
-      { userId: 'u2', userName: 'CARLOS ARTE', timestamp: yesterday, status: 'Concluído', sector: 'preImpressao' }
-    ], isArchived: false
-  },
-  {
-    id: '4', or: '112016', numeroItem: '33', lote: '01', versao: 'V1', cliente: 'RESTAURANTE SABOR', vendedor: 'HÉLIO', item: 'CARDÁPIO EM PS 2MM COM IMPRESSÃO UV',
-    dataEntrega: today, createdAt: yesterday, preImpressao: 'Em Produção', impressao: 'Pendente', producao: 'Pendente', instalacao: 'Pendente', expedicao: 'Pendente',
-    observacao: 'URGENTE PARA INAUGURAÇÃO', prioridade: 'Alta', history: [], isArchived: false
-  },
+        const countPerDay = Math.floor(Math.random() * 3) + 1; // 1 a 3 ordens por dia
 
-  // --- AMANHÃ E SEMANA ATUAL ---
-  {
-    id: '5', or: '112015', numeroItem: 'A-10', lote: '02', versao: 'V1', cliente: 'FARMÁCIA VIDA', vendedor: 'LARA', item: 'FAIXA DE GÔNDOLA PVC 0.5MM',
-    dataEntrega: tomorrow, createdAt: yesterday, preImpressao: 'Pendente', impressao: 'Pendente', producao: 'Pendente', instalacao: 'Pendente', expedicao: 'Pendente',
-    observacao: '1000 UNIDADES', prioridade: 'Média', history: [], isArchived: false
-  },
-  {
-    id: '6', or: '112018', numeroItem: '01', lote: '01', versao: 'V3', cliente: 'MERCADO MUNICIPAL', vendedor: 'CADU', item: 'BANNER LONA 440G 5X2M ILHÓS',
-    dataEntrega: getDate(3), createdAt: today, preImpressao: 'Pendente', impressao: 'Pendente', producao: 'Pendente', instalacao: 'Pendente', expedicao: 'Pendente',
-    observacao: '', prioridade: 'Baixa', history: [], isArchived: false
-  },
-  {
-    id: '7', or: '112020', numeroItem: '05', lote: '01', versao: 'V1', cliente: 'ACADEMIA SMART', vendedor: 'RODOLFO', item: 'ADESIVO JATEADO VIDRO 3X2M',
-    dataEntrega: getDate(4), createdAt: today, preImpressao: 'Em Produção', impressao: 'Pendente', producao: 'Pendente', instalacao: 'Pendente', expedicao: 'Pendente',
-    observacao: 'RECORTAR LOGO', prioridade: 'Média', history: [], isArchived: false
-  },
+        for (let j = 0; j < countPerDay; j++) {
+            orCounter++;
+            const isPast = i < 0;
+            const isToday = i === 0;
+            
+            // Lógica de Status Baseada na Data
+            let statusPre: Status = 'Pendente';
+            let statusImp: Status = 'Pendente';
+            let statusProd: Status = 'Pendente';
+            let statusInst: Status = 'Pendente';
+            let statusExp: Status = 'Pendente';
+            let isArchived = false;
+            let archivedAt = undefined;
 
-  // --- PRÓXIMA SEMANA / FUTURO ---
-  {
-    id: '8', or: '112025', numeroItem: 'TOTEM', lote: '01', versao: 'V1', cliente: 'CONSTRUTORA TENDA', vendedor: 'ALINE', item: 'TOTEM SINALIZAÇÃO INTERNA MDF E ACRÍLICO',
-    dataEntrega: getDate(10), createdAt: yesterday, preImpressao: 'Pendente', impressao: 'Pendente', producao: 'Pendente', instalacao: 'Pendente', expedicao: 'Pendente',
-    observacao: 'AGUARDANDO APROVAÇÃO DE COR', prioridade: 'Média', history: [], isArchived: false
-  },
-  {
-    id: '9', or: '112030', numeroItem: '01', lote: '01', versao: 'V1', cliente: 'PREFEITURA MUNICIPAL', vendedor: 'AUGUSTO', item: 'KIT SINALIZAÇÃO VIÁRIA (REFLETIVO)',
-    dataEntrega: getDate(15), createdAt: getDate(-1), preImpressao: 'Concluído', impressao: 'Pendente', producao: 'Pendente', instalacao: 'Pendente', expedicao: 'Pendente',
-    observacao: 'MATERIAL REFLETIVO CHEGA DIA 20', prioridade: 'Alta', history: [], isArchived: false
-  },
+            if (isPast) {
+                // Passado: Maioria concluída ou atrasada
+                if (Math.random() > 0.2) {
+                    statusPre = 'Concluído'; statusImp = 'Concluído'; statusProd = 'Concluído'; statusInst = 'Concluído'; statusExp = 'Concluído';
+                    isArchived = true;
+                    archivedAt = getDate(i + 1); // Arquivado dia seguinte a entrega
+                } else {
+                    // Atrasado
+                    statusPre = 'Concluído'; statusImp = 'Em Produção'; 
+                }
+            } else if (isToday) {
+                // Hoje: Em andamento
+                statusPre = 'Concluído'; statusImp = 'Concluído'; statusProd = 'Em Produção';
+            } else {
+                // Futuro
+                if (i < 5) {
+                    statusPre = 'Em Produção'; // Próximos dias
+                }
+            }
 
-  // --- FINALIZADAS / ARQUIVADAS ---
-  {
-    id: '10', or: '111050', numeroItem: '554', lote: '01', versao: 'V2', cliente: 'BANCO ITAU', vendedor: 'LARA', item: 'PLACA INTERNA ACRÍLICO CRISTAL 10MM',
-    dataEntrega: getDate(-15), createdAt: getDate(-20), preImpressao: 'Concluído', impressao: 'Concluído', producao: 'Concluído', instalacao: 'Concluído', expedicao: 'Concluído',
-    observacao: '', prioridade: 'Baixa', history: [], isArchived: true, archivedAt: getDate(-14)
-  },
-  {
-    id: '11', or: '111055', numeroItem: '01', lote: '01', versao: 'V1', cliente: 'PADARIA CENTRAL', vendedor: 'CADU', item: 'ADESIVO FREEZER',
-    dataEntrega: getDate(-10), createdAt: getDate(-12), preImpressao: 'Concluído', impressao: 'Concluído', producao: 'Concluído', instalacao: 'Concluído', expedicao: 'Concluído',
-    observacao: '', prioridade: 'Média', history: [], isArchived: true, archivedAt: getDate(-10)
-  }
-];
+            orders.push({
+                id: orCounter.toString(),
+                or: orCounter.toString(),
+                numeroItem: Math.random() > 0.5 ? String(Math.floor(Math.random() * 100)) : undefined,
+                quantidade: String(Math.floor(Math.random() * 10) + 1),
+                cliente: CLIENTS[Math.floor(Math.random() * CLIENTS.length)],
+                vendedor: VENDORS[Math.floor(Math.random() * VENDORS.length)],
+                item: ITEMS[Math.floor(Math.random() * ITEMS.length)],
+                dataEntrega: getDate(i),
+                createdAt: getDate(i - 10), // Criado 10 dias antes da entrega
+                preImpressao: statusPre,
+                impressao: statusImp,
+                producao: statusProd,
+                instalacao: statusInst,
+                expedicao: statusExp,
+                prioridade: Math.random() > 0.8 ? 'Alta' : Math.random() > 0.5 ? 'Média' : 'Baixa',
+                isArchived: isArchived,
+                archivedAt: archivedAt,
+                isRemake: Math.random() > 0.95, // 5% de chance de ser refazimento
+                observacao: Math.random() > 0.7 ? 'ATENÇÃO AOS DETALHES DE ACABAMENTO' : ''
+            });
+        }
+    }
+    return orders;
+};
+
+export const MOCK_ORDERS: Order[] = generateMockOrders();

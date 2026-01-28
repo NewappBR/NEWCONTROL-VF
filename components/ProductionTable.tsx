@@ -6,6 +6,9 @@ export interface ProductionTableHandle {
   expandAll: () => void;
   collapseAll: () => void;
   expandToday: () => void;
+  expandWeeks: () => void;
+  expandOrders: () => void;
+  scrollToTop: () => void;
 }
 
 interface ProductionTableProps {
@@ -208,6 +211,11 @@ const ProductionTable = forwardRef<ProductionTableHandle, ProductionTableProps>(
           const weekOrs = new Set<string>();
           current.days.forEach(d => d.orGroups.forEach(o => weekOrs.add(o.or)));
           setExpandedOrs(weekOrs);
+      } else {
+          // If no current week data, just expand the first week
+          if (groupedOrders.length > 0) {
+              setExpandedWeeks(new Set([groupedOrders[0].id]));
+          }
       }
   };
 
@@ -230,8 +238,6 @@ const ProductionTable = forwardRef<ProductionTableHandle, ProductionTableProps>(
       if (weeksToOpen.size > 0) {
           setExpandedWeeks(weeksToOpen);
           setExpandedOrs(orsToOpen);
-      } else {
-          // Optional: Feedback if no orders today
       }
   };
 
@@ -244,7 +250,10 @@ const ProductionTable = forwardRef<ProductionTableHandle, ProductionTableProps>(
   useImperativeHandle(ref, () => ({
     expandAll: handleExpandAll,
     collapseAll: handleCollapseAll,
-    expandToday: handleExpandCurrentDay
+    expandToday: handleExpandCurrentDay,
+    expandWeeks: handleExpandCurrentWeek,
+    expandOrders: handleExpandOrderMode,
+    scrollToTop: onScrollTop || (() => window.scrollTo({ top: 0, behavior: 'smooth' }))
   }));
 
   const toggleWeek = (groupId: string) => {
