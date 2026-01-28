@@ -72,12 +72,32 @@ const ProductionTable = forwardRef<ProductionTableHandle, ProductionTableProps>(
   // Estado para desktop (true = colapsado)
   const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
 
+  // Novo estado para filtro por coluna (Setor em Produção)
+  const [activeSectorFilter, setActiveSectorFilter] = useState<ProductionStep | null>(null);
+
   const stepsList: ProductionStep[] = ['preImpressao', 'impressao', 'producao', 'instalacao', 'expedicao'];
+
+  // Função para alternar o filtro de setor
+  const toggleSectorFilter = (step: ProductionStep) => {
+      if (activeSectorFilter === step) {
+          setActiveSectorFilter(null); // Remove filtro se clicar no mesmo
+      } else {
+          setActiveSectorFilter(step); // Ativa novo filtro
+          // Expande tudo automaticamente para facilitar a visualização dos resultados
+          setTimeout(() => handleExpandOrderMode(), 100);
+      }
+  };
 
   // Agrupamento de Ordens
   const groupedOrders = useMemo(() => {
+    // 1. Filtragem por Setor (Feature Nova)
+    // Se houver um filtro de setor ativo, mantém apenas as ordens que estão "Em Produção" naquele setor
+    const filteredOrders = activeSectorFilter 
+        ? orders.filter(o => o[activeSectorFilter] === 'Em Produção') 
+        : orders;
+
     const orGroups: Record<string, Order[]> = {};
-    orders.forEach(order => {
+    filteredOrders.forEach(order => {
         if (!orGroups[order.or]) orGroups[order.or] = [];
         orGroups[order.or].push(order);
     });
@@ -174,7 +194,7 @@ const ProductionTable = forwardRef<ProductionTableHandle, ProductionTableProps>(
         const daysWithArray = Object.values(week.days).sort((a, b) => a.dateStr.localeCompare(b.dateStr));
         return { ...week, days: daysWithArray };
     });
-  }, [orders, sortConfig]);
+  }, [orders, sortConfig, activeSectorFilter]);
 
   // Efeito para auto-expandir
   useEffect(() => {
@@ -392,6 +412,15 @@ const ProductionTable = forwardRef<ProductionTableHandle, ProductionTableProps>(
                     <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600"></div>
                     <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Concluídas</span>
                 </div>
+                {activeSectorFilter && (
+                    <div className="flex items-center gap-1.5 ml-4 bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 rounded-full animate-in fade-in">
+                        <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
+                        <span className="text-[9px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-wide">
+                            Filtrando: {STEP_LABELS[activeSectorFilter]} EM CURSO
+                        </span>
+                        <button onClick={() => setActiveSectorFilter(null)} className="ml-1 text-amber-600 hover:text-red-500">✕</button>
+                    </div>
+                )}
           </div>
       </div>
 
@@ -602,6 +631,12 @@ const ProductionTable = forwardRef<ProductionTableHandle, ProductionTableProps>(
             </div>
           );
         })}
+        {groupedOrders.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 opacity-50">
+                <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Nenhuma ordem encontrada</p>
+                {activeSectorFilter && <p className="text-[10px] font-bold text-amber-500 uppercase mt-2">Filtro Ativo: {STEP_LABELS[activeSectorFilter]} em produção</p>}
+            </div>
+        )}
       </div>
 
       {/* --- DESKTOP VIEW: TABLE --- */}
@@ -638,8 +673,22 @@ const ProductionTable = forwardRef<ProductionTableHandle, ProductionTableProps>(
                 >
                     ENTREGA <SortIcon colKey="dataEntrega"/>
                 </th>
+                
+                {/* HEADERS INTERATIVOS PARA FILTRAGEM */}
                 {stepsList.map(step => (
-                  <th key={step} className="w-[7%] px-1 py-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase text-center border-l border-slate-50 dark:border-slate-800">{STEP_LABELS[step]}</th>
+                  <th 
+                    key={step} 
+                    className={`w-[7%] px-1 py-4 text-[9px] font-black uppercase text-center border-l border-slate-50 dark:border-slate-800 cursor-pointer transition-all hover:bg-slate-50 dark:hover:bg-slate-800 select-none
+                        ${activeSectorFilter === step ? 'text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-900/10' : 'text-slate-400 dark:text-slate-500 hover:text-emerald-500'}
+                    `}
+                    onClick={() => toggleSectorFilter(step)}
+                    title={`Clique para mostrar apenas itens EM PRODUÇÃO em ${STEP_LABELS[step]}`}
+                  >
+                      {STEP_LABELS[step]}
+                      {activeSectorFilter === step && (
+                          <div className="w-1.5 h-1.5 bg-amber-500 rounded-full mx-auto mt-1 animate-pulse"></div>
+                      )}
+                  </th>
                 ))}
                 
                 <th className="w-[4%] px-2 py-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase text-center tracking-widest">ITENS</th>
@@ -648,6 +697,13 @@ const ProductionTable = forwardRef<ProductionTableHandle, ProductionTableProps>(
               </tr>
             </thead>
             <tbody>
+              {groupedOrders.length === 0 && (
+                  <tr>
+                      <td colSpan={18} className="py-20 text-center text-slate-400 uppercase text-xs font-bold">
+                          {activeSectorFilter ? `Nenhuma ordem em andamento no setor: ${STEP_LABELS[activeSectorFilter]}` : 'Nenhuma ordem encontrada.'}
+                      </td>
+                  </tr>
+              )}
               {groupedOrders.map((weekGroup) => {
                 const isWeekExpanded = expandedWeeks.has(weekGroup.id);
                 const totalInWeek = weekGroup.days.reduce((acc, day) => acc + day.orGroups.reduce((dAcc, or) => dAcc + or.items.length, 0), 0);
@@ -814,8 +870,11 @@ const ProductionTable = forwardRef<ProductionTableHandle, ProductionTableProps>(
                                                       const lastStepUpdate = getLastStepUpdate(order, step);
                                                       const isOwner = currentUser.role === 'Admin' || currentUser.departamento === 'Geral' || currentUser.departamento === step;
 
+                                                      // Check if this specific cell should be highlighted due to active filter
+                                                      const isHighlighted = activeSectorFilter === step && status === 'Em Produção';
+
                                                       return (
-                                                      <td key={step} className="w-[7%] px-1 py-2 text-center border-l border-slate-50 dark:border-slate-800">
+                                                      <td key={step} className={`w-[7%] px-1 py-2 text-center border-l border-slate-50 dark:border-slate-800 ${isHighlighted ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}>
                                                           <div className="flex flex-col items-center justify-center h-full">
                                                               <button 
                                                                   onClick={(e) => { e.stopPropagation(); if (isOwner) handleStepClick(order.id, step, status); }}
