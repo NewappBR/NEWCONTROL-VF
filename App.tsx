@@ -128,8 +128,9 @@ const App: React.FC = () => {
     else window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // CORREÇÃO: Força a tab correta ao clicar no dashboard
+  // CORREÇÃO: Força a tab correta, LIMPA A BUSCA e rola ao topo
   const handleDashboardFilterClick = (filter: 'TODAS' | 'PRODUCAO' | 'ATRASADAS') => {
+      setSearchTerm(''); // Limpa a busca para garantir que a lista apareça
       setActiveTab('OPERACIONAL'); 
       setDashboardFilter(filter); 
       if (mainRef.current) mainRef.current.scrollTo({ top: 0, behavior: 'smooth' }); 
