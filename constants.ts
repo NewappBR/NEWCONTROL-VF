@@ -13,19 +13,35 @@ export const STATUS_COLORS = {
 };
 
 export const MOCK_USERS: User[] = [
-  { id: 'admin-id', nome: 'ADMINISTRADOR', email: 'adm', role: 'Admin', cargo: 'DIRETORIA', departamento: 'Geral', password: DEFAULT_ADMIN_PASS },
-  { id: 'u2', nome: 'CARLOS ARTE', email: 'arte', role: 'Operador', cargo: 'DESIGNER', departamento: 'preImpressao', password: DEFAULT_USER_PASS },
-  { id: 'u3', nome: 'JOÃO PRINT', email: 'print', role: 'Operador', cargo: 'IMPRESSOR', departamento: 'impressao', password: DEFAULT_USER_PASS },
-  { id: 'u4', nome: 'MARCOS SERRALHEIRO', email: 'producao', role: 'Operador', cargo: 'METALÚRGICO', departamento: 'producao', password: DEFAULT_USER_PASS },
-  { id: 'u5', nome: 'EQUIPE INSTALA', email: 'instala', role: 'Operador', cargo: 'INSTALADOR', departamento: 'instalacao', password: DEFAULT_USER_PASS }
+  { id: 'admin-id', nome: 'DIRETORIA', email: 'adm', role: 'Admin', cargo: 'ADMINISTRADOR', departamento: 'Geral', password: DEFAULT_ADMIN_PASS },
+  { id: 'u2', nome: 'RICARDO SILVA', email: 'ricardo', role: 'Operador', cargo: 'LÍDER PRÉ-IMP', departamento: 'preImpressao', password: DEFAULT_USER_PASS },
+  { id: 'u3', nome: 'BEATRIZ COSTA', email: 'bia', role: 'Operador', cargo: 'OP. IMPRESSÃO UV', departamento: 'impressao', password: DEFAULT_USER_PASS },
+  { id: 'u4', nome: 'CARLOS MENDES', email: 'carlos', role: 'Operador', cargo: 'SERRALHEIRO SR', departamento: 'producao', password: DEFAULT_USER_PASS },
+  { id: 'u5', nome: 'EQUIPE EXTERNA 01', email: 'equipe1', role: 'Operador', cargo: 'INSTALAÇÃO', departamento: 'instalacao', password: DEFAULT_USER_PASS },
+  { id: 'u6', nome: 'ROBERTO LOG', email: 'beto', role: 'Operador', cargo: 'EXPEDIÇÃO', departamento: 'expedicao', password: DEFAULT_USER_PASS }
 ];
 
-export const VENDORS = ['ALINE', 'LARA', 'CADU', 'AUGUSTO', 'HÉLIO', 'RODOLFO', 'MARIANA'];
-const CLIENTS = ['REDE GRAAL', 'BANCO ITAU', 'POSTO SHELL', 'FARMÁCIA VIDA', 'MERCADO MUNICIPAL', 'SHOPPING LINS', 'RESTAURANTE SABOR', 'CONSTRUTORA TENDA', 'ACADEMIA SMART', 'PREFEITURA MUNICIPAL', 'PADARIA CENTRAL', 'CLÍNICA SAÚDE'];
+export const VENDORS = ['ALINE M.', 'BRUNO S.', 'CARLA D.', 'FELIPE J.', 'MARIANA L.', 'RODRIGO P.'];
+
+const CLIENTS = [
+    'GRUPO PÃO DE AÇÚCAR', 'REDE SMART FIT', 'BANCO SANTANDER', 'CONST. TENDA', 
+    'FARMÁCIAS PAGUE MENOS', 'PETROBRAS', 'SHOPPING IGUATEMI', 'REDE GRAAL', 
+    'HOSPITAL SÍRIO LIBANÊS', 'BURGER KING', 'LOCALIZA HERTZ', 'VIVARA'
+];
+
 const ITEMS = [
-    'LUMINOSO BACKLIGHT 3X1M', 'ADESIVOS DE BOMBA (KIT)', 'PAINEL ACM 12X3M + LETRA', 'CARDÁPIO EM PS 2MM UV', 
-    'FAIXA DE GÔNDOLA PVC', 'BANNER LONA 440G', 'ADESIVO JATEADO VIDRO', 'TOTEM SINALIZAÇÃO MDF', 
-    'PLACA DE OBRA 2X1M', 'ENVELOPAMENTO DE FROTA', 'LETRA CAIXA INOX', 'SINALIZAÇÃO DE EMERGÊNCIA'
+    'LETREIRO CAIXA ALTA INOX ESCOVADO (50CM)', 
+    'ADESIVAÇÃO DE FROTA - KIT COMPLETO FIORINO', 
+    'TÓTEM SINALIZAÇÃO INTERNA MDF 15MM', 
+    'LONA BACKLIGHT 440G - IMPRESSÃO UV (5X2M)', 
+    'FAIXA DE GÔNDOLA EM PETG 1MM', 
+    'REVESTIMENTO EM ACM - FACHADA PRINCIPAL', 
+    'SINALIZAÇÃO DE SEGURANÇA (KIT 50 PLACAS)', 
+    'DISPLAY DE MESA ACRÍLICO 3MM DOBRADO', 
+    'ADESIVO JATEADO COM RECORTE ELETRÔNICO', 
+    'PAINEL DE GESTÃO À VISTA (QUADRO BRANCO)',
+    'BANNER PROMOCIONAL COM BASTÃO E CORDÃO',
+    'PLACAS DE OBRA EM PS 2MM COM ILHÓS'
 ];
 
 // Helper para gerar datas
@@ -37,21 +53,21 @@ const getDate = (offsetDays: number) => {
 
 const generateMockOrders = (): Order[] => {
     const orders: Order[] = [];
-    let orCounter = 112000;
+    let orCounter = 112050; // Começando de um número mais alto
 
-    // Gerar 60 ordens distribuídas em -30 dias a +30 dias
-    for (let i = -30; i <= 30; i++) {
-        // Pula alguns dias para dar realismo (nem todo dia tem entrega)
-        if (Math.random() > 0.7) continue;
+    // Gerar 45 ordens distribuídas para um visual de tabela cheia mas organizada
+    for (let i = -20; i <= 25; i++) {
+        // Pula alguns dias para dar realismo
+        if (Math.random() > 0.65) continue;
 
-        const countPerDay = Math.floor(Math.random() * 3) + 1; // 1 a 3 ordens por dia
+        const countPerDay = Math.floor(Math.random() * 3) + 1;
 
         for (let j = 0; j < countPerDay; j++) {
             orCounter++;
             const isPast = i < 0;
             const isToday = i === 0;
             
-            // Lógica de Status Baseada na Data
+            // Lógica de Status Baseada na Data para parecer real
             let statusPre: Status = 'Pendente';
             let statusImp: Status = 'Pendente';
             let statusProd: Status = 'Pendente';
@@ -61,49 +77,71 @@ const generateMockOrders = (): Order[] => {
             let archivedAt = undefined;
 
             if (isPast) {
-                // Passado: Maioria concluída ou atrasada
-                if (Math.random() > 0.2) {
+                // Passado: Maioria concluída
+                if (Math.random() > 0.15) {
                     statusPre = 'Concluído'; statusImp = 'Concluído'; statusProd = 'Concluído'; statusInst = 'Concluído'; statusExp = 'Concluído';
                     isArchived = true;
-                    archivedAt = getDate(i + 1); // Arquivado dia seguinte a entrega
+                    archivedAt = getDate(i + 2); 
                 } else {
-                    // Atrasado
+                    // Alguns atrasados no processo
                     statusPre = 'Concluído'; statusImp = 'Em Produção'; 
                 }
             } else if (isToday) {
-                // Hoje: Em andamento
-                statusPre = 'Concluído'; statusImp = 'Concluído'; statusProd = 'Em Produção';
+                // Hoje: Foco total
+                statusPre = 'Concluído'; statusImp = Math.random() > 0.5 ? 'Concluído' : 'Em Produção'; statusProd = statusImp === 'Concluído' ? 'Em Produção' : 'Pendente';
             } else {
                 // Futuro
-                if (i < 5) {
-                    statusPre = 'Em Produção'; // Próximos dias
+                if (i < 3) {
+                    statusPre = 'Em Produção'; // Próximos dias começando
                 }
             }
 
             orders.push({
                 id: orCounter.toString(),
                 or: orCounter.toString(),
-                numeroItem: Math.random() > 0.5 ? String(Math.floor(Math.random() * 100)) : undefined,
-                quantidade: String(Math.floor(Math.random() * 10) + 1),
+                numeroItem: Math.random() > 0.3 ? `REF-${String(Math.floor(Math.random() * 900) + 100)}` : undefined,
+                quantidade: String(Math.floor(Math.random() * 50) + 1),
                 cliente: CLIENTS[Math.floor(Math.random() * CLIENTS.length)],
                 vendedor: VENDORS[Math.floor(Math.random() * VENDORS.length)],
                 item: ITEMS[Math.floor(Math.random() * ITEMS.length)],
                 dataEntrega: getDate(i),
-                createdAt: getDate(i - 10), // Criado 10 dias antes da entrega
+                createdAt: getDate(i - 15), 
                 preImpressao: statusPre,
                 impressao: statusImp,
                 producao: statusProd,
                 instalacao: statusInst,
                 expedicao: statusExp,
-                prioridade: Math.random() > 0.8 ? 'Alta' : Math.random() > 0.5 ? 'Média' : 'Baixa',
+                prioridade: Math.random() > 0.85 ? 'Alta' : Math.random() > 0.4 ? 'Média' : 'Baixa',
                 isArchived: isArchived,
                 archivedAt: archivedAt,
-                isRemake: Math.random() > 0.95, // 5% de chance de ser refazimento
-                observacao: Math.random() > 0.7 ? 'ATENÇÃO AOS DETALHES DE ACABAMENTO' : ''
+                isRemake: Math.random() > 0.97, 
+                observacao: Math.random() > 0.8 ? 'CLIENTE EXIGE COR PANTONE 485C' : ''
             });
         }
     }
-    return orders;
+    // Adicionar um item fixo de exemplo "Problemático" para teste visual
+    orders.push({
+        id: '999999',
+        or: '112999',
+        numeroItem: 'REF-URGENTE',
+        quantidade: '1000',
+        cliente: 'CLIENTE ESPECIAL VIP',
+        vendedor: 'DIRETORIA',
+        item: 'PROJETO ESPECIAL DE SINALIZAÇÃO COMPLETA (URGENTE)',
+        dataEntrega: getDate(-1), // Atrasado ontem
+        createdAt: getDate(-5),
+        preImpressao: 'Concluído',
+        impressao: 'Concluído',
+        producao: 'Em Produção',
+        instalacao: 'Pendente',
+        expedicao: 'Pendente',
+        prioridade: 'Alta',
+        isArchived: false,
+        isRemake: true,
+        observacao: 'PRIORIDADE MÁXIMA - ENTREGAR AMANHÃ SEM FALTA'
+    });
+
+    return orders.sort((a, b) => b.or.localeCompare(a.or));
 };
 
 export const MOCK_ORDERS: Order[] = generateMockOrders();

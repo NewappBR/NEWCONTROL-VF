@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import Logo from './Logo';
 
 interface LoginProps {
   onLogin: (email: string, pass: string) => boolean;
@@ -50,17 +51,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, onResetPassword, companyLogo }) 
     <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950 p-4 transition-colors duration-300">
       <div className={`w-full max-w-[400px] p-12 bg-white dark:bg-slate-900 rounded-[48px] shadow-2xl border border-slate-200 dark:border-slate-800 transition-all ${error ? 'animate-shake border-red-300 dark:border-red-800' : ''}`}>
         <div className="flex flex-col items-center mb-10">
-          <div className="w-28 h-28 bg-[#064e3b] dark:bg-emerald-950 rounded-[32px] flex items-center justify-center shadow-xl mb-6 text-emerald-400 relative overflow-hidden group">
-            {companyLogo ? (
-              <img src={companyLogo} alt="Logo" className="w-full h-full object-cover" />
-            ) : (
-              <svg className="w-16 h-16 transform group-hover:scale-110 transition-transform duration-500" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2L4 7L12 12L20 7L12 2Z" fill="currentColor" fillOpacity="0.4"/>
-                <path d="M12 12L4 17L12 22L20 17L12 12Z" fill="currentColor" fillOpacity="0.2"/>
-                <path d="M4 7V17L12 12L4 7Z" fill="currentColor" fillOpacity="0.7"/>
-                <path d="M20 7V17L12 12L20 7Z" fill="currentColor"/>
-              </svg>
-            )}
+          <div className="w-28 h-28 bg-[#064e3b] dark:bg-emerald-950 rounded-[32px] flex items-center justify-center shadow-xl mb-6 text-emerald-400 relative overflow-hidden group p-4">
+            <Logo 
+              src={companyLogo} 
+              className="w-full h-full transform group-hover:scale-110 transition-transform duration-500" 
+            />
           </div>
           <h1 className="text-3xl font-black tracking-tighter text-[#064e3b] dark:text-emerald-500 uppercase text-center">NEWCOM <span className="text-emerald-500 dark:text-emerald-300">CONTROL</span></h1>
           <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mt-2 leading-none text-center">Production Planning and Control</p>

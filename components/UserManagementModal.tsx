@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { User, UserRole, DEPARTMENTS, Order, HistoryEntry, CompanySettings, Ramal, GlobalLogEntry } from '../types';
 import { DEFAULT_USER_PASS } from '../constants';
+import Logo from './Logo';
 
 interface UserManagementModalProps {
   users: User[];
@@ -859,17 +860,8 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
           <div className="px-4 py-4 md:px-10 md:pt-8 md:pb-0 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-4 md:gap-6 shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3 md:gap-6">
-                <div className="w-10 h-10 md:w-14 md:h-14 bg-[#064e3b] dark:bg-emerald-900 rounded-xl md:rounded-2xl flex items-center justify-center shadow-xl overflow-hidden shrink-0">
-                  {localSettings.logoUrl ? (
-                    <img src={localSettings.logoUrl} alt="Logo" className="w-full h-full object-cover" />
-                  ) : (
-                    <svg className="w-6 h-6 md:w-8 md:h-8 text-emerald-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2L4 7L12 12L20 7L12 2Z" fill="currentColor" fillOpacity="0.4"/>
-                        <path d="M12 12L4 17L12 22L20 17L12 12Z" fill="currentColor" fillOpacity="0.2"/>
-                        <path d="M4 7V17L12 12L4 7Z" fill="currentColor" fillOpacity="0.7"/>
-                        <path d="M20 7V17L12 12L20 7Z" fill="currentColor"/>
-                    </svg>
-                  )}
+                <div className="w-10 h-10 md:w-14 md:h-14 bg-[#064e3b] dark:bg-emerald-900 rounded-xl md:rounded-2xl flex items-center justify-center shadow-xl overflow-hidden shrink-0 p-1">
+                  <Logo src={localSettings.logoUrl} className="w-full h-full" />
                 </div>
                 <div>
                   <h3 className="text-lg md:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none">Painel Admin</h3>
@@ -1292,13 +1284,9 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({
                         </div>
                         <div 
                             onClick={() => fileInputRef.current?.click()}
-                            className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center cursor-pointer hover:border-emerald-500 transition-colors overflow-hidden"
+                            className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center cursor-pointer hover:border-emerald-500 transition-colors overflow-hidden p-1"
                         >
-                            {localSettings.logoUrl ? (
-                                <img src={localSettings.logoUrl} alt="Logo" className="w-full h-full object-cover" />
-                            ) : (
-                                <span className="text-[8px] font-black text-slate-300">ADD</span>
-                            )}
+                            <Logo src={localSettings.logoUrl} className="w-full h-full" />
                         </div>
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleLogoUpload} />
                     </div>

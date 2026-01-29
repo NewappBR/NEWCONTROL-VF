@@ -13,6 +13,7 @@ import OperatorPanel from './components/OperatorPanel';
 import CreateAlertModal from './components/CreateAlertModal';
 import QRScannerModal from './components/QRScannerModal';
 import TechnicalSheetModal from './components/TechnicalSheetModal';
+import Logo from './components/Logo';
 import { MOCK_USERS, DEFAULT_USER_PASS, MOCK_ORDERS } from './constants';
 import { 
   loadFullData, 
@@ -483,7 +484,9 @@ const App: React.FC = () => {
     <div className="h-screen flex flex-col bg-[#fdfdfd] dark:bg-slate-950 overflow-hidden relative transition-colors duration-300">
       <header className="bg-[#064e3b] dark:bg-emerald-950 h-14 flex items-center justify-between px-4 md:px-6 shrink-0 z-50 border-b border-emerald-900 shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white shadow-inner">{companySettings.logoUrl ? <img src={companySettings.logoUrl} className="w-full h-full object-cover rounded-xl"/> : <span className="font-bold">NC</span>}</div>
+          <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white shadow-inner p-1">
+             <Logo src={companySettings.logoUrl} className="w-full h-full" />
+          </div>
           <div><h1 className="text-white font-black text-xs md:text-sm tracking-[2px] uppercase">{companySettings.name.split(' ')[0]}</h1><span className="text-emerald-400 font-black text-[8px] uppercase tracking-[3px]">CONTROL</span></div>
         </div>
         <div className="hidden md:flex flex-1 justify-center">
@@ -592,7 +595,7 @@ const App: React.FC = () => {
         <>
             {/* FLOATING COLLAPSED BUTTON (Mobile) */}
             {isMobileDockCollapsed && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[800] md:hidden animate-in slide-in-from-bottom-4">
+                <div className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-[800] md:hidden animate-in slide-in-from-bottom-4">
                     <button 
                         onClick={() => setIsMobileDockCollapsed(false)}
                         className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl px-8 py-3 rounded-full shadow-2xl border-2 border-slate-100 dark:border-slate-800 flex items-center gap-3 active:scale-95 transition-all"
@@ -605,8 +608,8 @@ const App: React.FC = () => {
 
             {/* FULL DOCK (Mobile) */}
             {!isMobileDockCollapsed && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[800] md:hidden w-[95%] max-w-[420px] animate-in slide-in-from-bottom-6 duration-300">
-                    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-2 rounded-[24px] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col gap-2 relative">
+                <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-[800] md:hidden w-[98%] max-w-[420px] animate-in slide-in-from-bottom-6 duration-300">
+                    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-1.5 rounded-[24px] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col gap-1.5 relative">
                         
                         {/* Collapse Handle */}
                         <button 
@@ -635,34 +638,34 @@ const App: React.FC = () => {
                         </div>
 
                         {/* Row 2: Tools & Actions & QR - FIXED LAYOUT FOR NO OVERLAP */}
-                        <div className="flex justify-between items-end px-1 pb-1 relative h-16">
+                        <div className="flex justify-between items-end px-0.5 pb-0.5 relative h-14">
                             
                             {/* Left Group: View Tools (Calculated width to avoid center QR) */}
-                            <div className="flex gap-2 overflow-x-auto custom-scrollbar w-[calc(50%-42px)] pr-1 items-center h-full justify-start mask-linear-fade-right">
+                            <div className="flex gap-1 overflow-x-auto custom-scrollbar w-[calc(50%-32px)] pr-0.5 items-center h-full justify-start mask-linear-fade-right">
                                 <button 
                                     onClick={() => tableRef.current?.expandAll()} 
-                                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 flex items-center justify-center active:scale-90 transition-transform shrink-0"
+                                    className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 flex items-center justify-center active:scale-90 transition-transform shrink-0"
                                     title="Expandir Tudo"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" strokeWidth="2"/></svg>
                                 </button>
                                 <button 
                                     onClick={() => tableRef.current?.collapseAll()} 
-                                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
+                                    className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
                                     title="Recolher Tudo"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v16h16V4H4z" strokeWidth="2"/><path d="M9 9l6 6m0-6l-6 6" strokeWidth="2"/></svg>
                                 </button>
                                 <button 
                                     onClick={() => tableRef.current?.expandToday()} 
-                                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-amber-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
+                                    className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-amber-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
                                     title="Foco Hoje"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                 </button>
                                 <button 
                                     onClick={() => handleScrollToTop()} 
-                                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
+                                    className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
                                     title="Topo"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 10l7-7m0 0l7 7m-7-7v18" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -673,38 +676,38 @@ const App: React.FC = () => {
                             <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 z-20">
                                 <button 
                                     onClick={() => setShowScanner(true)}
-                                    className="w-16 h-16 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full flex items-center justify-center shadow-lg border-4 border-white dark:border-slate-900 active:scale-90 transition-transform"
+                                    className="w-14 h-14 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full flex items-center justify-center shadow-lg border-4 border-white dark:border-slate-900 active:scale-90 transition-transform"
                                 >
-                                    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM6 8v4h4V8H6zm14 10.5c0 .276-.224.5-.5.5h-3a.5.5 0 01-.5-.5v-3a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3z" strokeWidth="2"/></svg>
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM6 8v4h4V8H6zm14 10.5c0 .276-.224.5-.5.5h-3a.5.5 0 01-.5-.5v-3a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3z" strokeWidth="2"/></svg>
                                 </button>
                             </div>
 
                             {/* Right Group: Modes & Actions (Calculated width) */}
-                            <div className="flex gap-2 overflow-x-auto custom-scrollbar w-[calc(50%-42px)] pl-1 items-center h-full justify-end mask-linear-fade-left">
+                            <div className="flex gap-1 overflow-x-auto custom-scrollbar w-[calc(50%-32px)] pl-0.5 items-center h-full justify-end mask-linear-fade-left">
                                 <button 
                                     onClick={() => tableRef.current?.expandWeeks()} 
-                                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 flex items-center justify-center active:scale-90 transition-transform shrink-0 font-black text-[9px]"
+                                    className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 flex items-center justify-center active:scale-90 transition-transform shrink-0 font-black text-[9px]"
                                     title="Modo Semana"
                                 >
                                     SEM
                                 </button>
                                 <button 
                                     onClick={() => tableRef.current?.expandOrders()} 
-                                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 flex items-center justify-center active:scale-90 transition-transform shrink-0 font-black text-[9px]"
+                                    className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 flex items-center justify-center active:scale-90 transition-transform shrink-0 font-black text-[9px]"
                                     title="Modo Ordens"
                                 >
                                     ORD
                                 </button>
                                 <button 
                                     onClick={handleCreateNewOrder}
-                                    className="w-10 h-10 rounded-full bg-emerald-500 text-white shadow-md shadow-emerald-500/30 flex items-center justify-center active:scale-90 transition-transform shrink-0"
+                                    className="w-9 h-9 rounded-full bg-emerald-500 text-white shadow-md shadow-emerald-500/30 flex items-center justify-center active:scale-90 transition-transform shrink-0"
                                     title="Nova Ordem"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                                 </button>
                                 <button 
                                     onClick={() => setShowOperatorPanel(true)}
-                                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
+                                    className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center active:scale-90 transition-transform shrink-0"
                                     title="Menu"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>

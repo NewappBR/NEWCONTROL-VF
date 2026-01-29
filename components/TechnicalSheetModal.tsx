@@ -2,6 +2,7 @@
 import React, { useMemo, useState, useRef } from 'react';
 import { Order, CompanySettings, DEPARTMENTS, ProductionStep, Status, User } from '../types';
 import { generateTechnicalSheetHtml } from '../utils/printHelpers';
+import Logo from './Logo';
 
 interface TechnicalSheetModalProps {
   order: Order;
@@ -141,8 +142,8 @@ const TechnicalSheetModal: React.FC<TechnicalSheetModalProps> = ({
         <div className="bg-[#064e3b] dark:bg-emerald-950 px-4 py-4 md:p-6 md:pb-12 relative shrink-0 shadow-md z-10">
            <div className="flex justify-between items-start">
               <div className="flex items-center gap-3">
-                 <div className="w-8 h-8 md:w-10 md:h-10 bg-white/10 rounded-xl flex items-center justify-center text-emerald-400 backdrop-blur-sm">
-                    <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" strokeWidth="2"/></svg>
+                 <div className="w-8 h-8 md:w-10 md:h-10 bg-white/10 rounded-xl flex items-center justify-center text-emerald-400 backdrop-blur-sm p-1">
+                    <Logo src={companySettings.logoUrl} className="w-full h-full" />
                  </div>
                  <div>
                     <h2 className="text-white font-black uppercase text-xs md:text-sm tracking-widest leading-none">Ficha Técnica</h2>
