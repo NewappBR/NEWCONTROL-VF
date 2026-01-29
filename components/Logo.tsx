@@ -11,32 +11,27 @@ const Logo: React.FC<LogoProps> = ({ src, className = "w-full h-full" }) => {
     return <img src={src} alt="Logo" className={`${className} object-contain`} />;
   }
 
-  // LOGO CONCEITUAL "NEWCOM CONTROL"
-  // Design geométrico abstrato representando precisão, controle e fluxo industrial.
+  // LOGO "PENA" (FEATHER)
+  // Design simples e elegante representando leveza e escrita.
   return (
     <svg 
         className={className} 
         viewBox="0 0 24 24" 
         fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2" 
+        strokeLinecap="round" 
+        strokeLinejoin="round"
         xmlns="http://www.w3.org/2000/svg"
     >
-        {/* Fundo Hexagonal Sutil */}
-        <path d="M12 2L3 7V17L12 22L21 17V7L12 2Z" fill="currentColor" fillOpacity="0.1" />
+        {/* Corpo da Pena */}
+        <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z" />
         
-        {/* Elemento Central - N Estilizado / Fluxo */}
-        <path 
-            d="M7 8V16L12 13V8L17 11V16" 
-            stroke="currentColor" 
-            strokeWidth="2.5" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
-        />
+        {/* Haste Central (Quill) descendo até a ponta de escrita */}
+        <line x1="16" y1="8" x2="2" y2="22" />
         
-        {/* Pontos de Conexão/Controle */}
-        <circle cx="7" cy="16" r="1.5" fill="currentColor" />
-        <circle cx="17" cy="8" r="1.5" fill="currentColor" />
-        <circle cx="12" cy="22" r="1" fill="currentColor" fillOpacity="0.5" />
-        <circle cx="12" cy="2" r="1" fill="currentColor" fillOpacity="0.5" />
+        {/* Detalhe lateral da pena */}
+        <line x1="17.5" y1="15" x2="9" y2="15" />
     </svg>
   );
 };
