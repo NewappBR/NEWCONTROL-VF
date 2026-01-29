@@ -27,7 +27,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
   const sectors = Object.keys(groupedNotifications).sort();
 
   return (
-    <div className="fixed inset-0 z-[999] md:absolute md:top-14 md:right-0 md:w-[400px] md:h-auto md:max-h-[85vh] md:inset-auto bg-white dark:bg-slate-900 md:rounded-3xl shadow-4xl border-none md:border border-slate-200 dark:border-slate-800 overflow-hidden animate-in slide-in-from-top-2 duration-200 flex flex-col">
+    <div className="fixed inset-0 z-[999] md:absolute md:top-full md:right-0 md:mt-2 md:w-[400px] md:h-auto md:max-h-[85vh] md:inset-auto bg-white dark:bg-slate-900 md:rounded-3xl shadow-4xl border-none md:border border-slate-200 dark:border-slate-800 overflow-hidden animate-in slide-in-from-top-2 duration-200 flex flex-col">
       <div className="px-6 py-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 sticky top-0 z-20">
         <div className="flex items-center gap-3 md:gap-2">
             <button onClick={onClose} className="p-1 -ml-2 text-slate-400 hover:text-red-500 transition-colors" title="Fechar Painel">

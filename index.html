@@ -44,14 +44,22 @@
             ::-webkit-scrollbar-thumb { background: #10b981; border-radius: 10px; }
         }
 
-        /* Mobile Scroll */
+        /* Mobile Scroll - Ocultar completamente barras de rolagem para visual limpo */
         @media (max-width: 767px) {
             .custom-scrollbar {
                 -webkit-overflow-scrolling: touch;
-                scrollbar-width: none; /* Firefox */
+                -ms-overflow-style: none;  /* IE and Edge */
+                scrollbar-width: none;  /* Firefox */
             }
             .custom-scrollbar::-webkit-scrollbar {
                 display: none; /* Chrome/Safari */
+                width: 0px;
+                background: transparent;
+            }
+            /* Garantir que o body/main também não mostre barra nativa feia sobrepondo */
+            ::-webkit-scrollbar {
+                width: 0px;
+                background: transparent;
             }
         }
 

@@ -118,7 +118,8 @@ const App: React.FC = () => {
   });
 
   // Derived state to check if any modal is open (to hide mobile dock)
-  const isAnyModalOpen = showOrderModal || showQRModal || showHistoryModal || showUserManagement || showOperatorPanel || showCreateAlert || showScanner || showTechSheetModal;
+  // ADDED: showNotifications to this list to hide dock when notifications are open
+  const isAnyModalOpen = showOrderModal || showQRModal || showHistoryModal || showUserManagement || showOperatorPanel || showCreateAlert || showScanner || showTechSheetModal || showNotifications;
 
   const formatHeaderTime = (date: Date) => {
     const options: Intl.DateTimeFormatOptions = { 
@@ -531,7 +532,16 @@ const App: React.FC = () => {
 
             <div className="relative">
                 <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-white/70 hover:text-emerald-400"><svg className="w-6 h-6 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" strokeWidth="2.5"/></svg>{notifications.length > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-[#064e3b]"></span>}</button>
-                {showNotifications && <NotificationPanel notifications={notifications} onClose={() => setShowNotifications(false)} onMarkAsRead={handleMarkAsRead} onMarkAllAsRead={handleMarkAllRead} onAction={handleNotificationAction} />}
+                {/* NOTIFICATION PANEL MOVED INSIDE HEADER FOR DESKTOP POSITIONING */}
+                {showNotifications && (
+                    <NotificationPanel 
+                        notifications={notifications} 
+                        onClose={() => setShowNotifications(false)} 
+                        onMarkAsRead={handleMarkAsRead} 
+                        onMarkAllAsRead={handleMarkAllRead} 
+                        onAction={handleNotificationAction} 
+                    />
+                )}
             </div>
             <div className="flex items-center gap-3 pl-4 border-l border-white/10">
                 <div className="hidden md:flex flex-col items-end"><span className="text-[11px] font-black text-white uppercase">{currentUser.nome}</span><span className="text-[8px] font-bold text-emerald-400 uppercase">{currentUser.cargo}</span></div>
@@ -591,7 +601,8 @@ const App: React.FC = () => {
       </main>
 
       {/* --- UNIFIED MOBILE CONTROL DOCK (2-ROW ISLAND) --- */}
-      {!isAnyModalOpen && (
+      {/* Exibir apenas se nenhum modal estiver aberto E NÃO estiver no modo Calendário */}
+      {!isAnyModalOpen && activeTab !== 'CALENDÁRIO' && (
         <>
             {/* FLOATING COLLAPSED BUTTON (Mobile) */}
             {isMobileDockCollapsed && (
@@ -611,16 +622,17 @@ const App: React.FC = () => {
                 <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-[800] md:hidden w-[98%] max-w-[420px] animate-in slide-in-from-bottom-6 duration-300">
                     <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-1.5 rounded-[24px] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col gap-1.5 relative">
                         
-                        {/* Collapse Handle */}
+                        {/* Collapse Handle - MELHORADO PARA TOQUE */}
                         <button 
                             onClick={() => setIsMobileDockCollapsed(true)}
-                            className="absolute -top-3 left-1/2 -translate-x-1/2 w-10 h-6 bg-white dark:bg-slate-900 rounded-t-lg shadow-sm border-t border-x border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors"
+                            className="absolute -top-6 left-1/2 -translate-x-1/2 w-20 h-10 bg-white dark:bg-slate-900 rounded-t-2xl shadow-sm border-t border-x border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 hover:text-red-500 transition-all active:scale-95 z-0"
+                            title="Recolher Ferramentas"
                         >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            <div className="w-10 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mt-2"></div>
                         </button>
 
                         {/* Row 1: Navigation Tabs */}
-                        <div className="flex bg-slate-100 dark:bg-black/40 rounded-xl p-1 h-10 relative">
+                        <div className="flex bg-slate-100 dark:bg-black/40 rounded-xl p-1 h-10 relative z-10">
                             <button 
                                 onClick={() => setActiveTab('OPERACIONAL')}
                                 className={`flex-1 rounded-lg text-[9px] font-black uppercase transition-all z-10 ${activeTab === 'OPERACIONAL' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-400'}`}
@@ -638,9 +650,9 @@ const App: React.FC = () => {
                         </div>
 
                         {/* Row 2: Tools & Actions & QR - FIXED LAYOUT FOR NO OVERLAP */}
-                        <div className="flex justify-between items-end px-0.5 pb-0.5 relative h-14">
+                        <div className="flex justify-between items-end px-0.5 pb-0.5 relative h-14 z-10">
                             
-                            {/* Left Group: View Tools (Calculated width to avoid center QR) */}
+                            {/* Left Group: View Tools */}
                             <div className="flex gap-1 overflow-x-auto custom-scrollbar w-[calc(50%-32px)] pr-0.5 items-center h-full justify-start mask-linear-fade-right">
                                 <button 
                                     onClick={() => tableRef.current?.expandAll()} 
@@ -682,7 +694,7 @@ const App: React.FC = () => {
                                 </button>
                             </div>
 
-                            {/* Right Group: Modes & Actions (Calculated width) */}
+                            {/* Right Group: Modes & Actions */}
                             <div className="flex gap-1 overflow-x-auto custom-scrollbar w-[calc(50%-32px)] pl-0.5 items-center h-full justify-end mask-linear-fade-left">
                                 <button 
                                     onClick={() => tableRef.current?.expandWeeks()} 
