@@ -176,11 +176,12 @@ const App: React.FC = () => {
     setTimeout(() => setToast(prev => ({ ...prev, show: false })), 4000);
   };
 
-  const addNotification = (title: string, message: string, type: 'urgent' | 'warning' | 'info' | 'success', targetId: string = 'ALL', sector?: string) => {
+  const addNotification = (title: string, message: string, type: 'urgent' | 'warning' | 'info' | 'success', targetId: string = 'ALL', sector?: string, actionLabel?: string, metadata?: any) => {
     const newNotif: Notification = {
       id: Date.now().toString() + Math.random().toString(),
       title, message, type, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      readBy: [], targetUserId: targetId, targetSector: sector || 'Geral'
+      readBy: [], targetUserId: targetId, targetSector: sector || 'Geral',
+      actionLabel, metadata
     };
     setSystemNotifications(prev => {
         const isDuplicate = prev.some(n => n.title === title && n.message === message && n.targetUserId === targetId);
@@ -455,7 +456,11 @@ const App: React.FC = () => {
 
   const handleLogin = (loginOrName: string, pass: string) => {
     const input = loginOrName.trim().toLowerCase();
-    const found = users.find(x => (x.email.toLowerCase() === input || x.nome.toLowerCase() === input) && x.password === pass);
+    const found = users.find(x => {
+        const email = (x.email || '').toLowerCase().trim();
+        const nome = (x.nome || '').toLowerCase().trim();
+        return (email === input || nome === input) && x.password === pass;
+    });
     if (found) { setCurrentUser(found); return true; }
     return false;
   };
@@ -464,7 +469,15 @@ const App: React.FC = () => {
       localStorage.setItem('pcp_reset_request_user', login); 
       const admins = users.filter(u => u.role === 'Admin');
       admins.forEach(admin => {
-          addNotification('🔐 RESET DE SENHA', `Usuário "${login}" pediu reset.`, 'urgent', admin.id);
+          addNotification(
+            '🔐 RESET DE SENHA', 
+            `Usuário "${login}" pediu reset.`, 
+            'urgent', 
+            admin.id, 
+            undefined,
+            'RESETAR (1234)', 
+            { type: 'RESET_PASSWORD', targetUserLogin: login }
+          );
       });
       showToast("Solicitação enviada.", "success");
   };
