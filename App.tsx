@@ -493,7 +493,7 @@ const App: React.FC = () => {
           <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white shadow-inner p-1">
              <Logo src={companySettings.logoUrl} className="w-full h-full" />
           </div>
-          <div><h1 className="text-white font-black text-xs md:text-sm tracking-[2px] uppercase">{companySettings.name.split(' ')[0]}</h1><span className="text-emerald-400 font-black text-[8px] uppercase tracking-[3px]">CONTROL</span></div>
+          <div className="hidden md:block"><h1 className="text-white font-black text-xs md:text-sm tracking-[2px] uppercase">{companySettings.name.split(' ')[0]}</h1><span className="text-emerald-400 font-black text-[8px] uppercase tracking-[3px]">CONTROL</span></div>
         </div>
         <div className="hidden md:flex flex-1 justify-center">
           <div className={`px-6 py-1.5 bg-black/20 rounded-full border border-white/5 flex items-center gap-3 ${isSyncing ? 'animate-pulse ring-1 ring-emerald-400' : ''}`}>

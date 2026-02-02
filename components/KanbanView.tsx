@@ -23,6 +23,9 @@ const KanbanView: React.FC<KanbanViewProps> = ({
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [collapsedColumns, setCollapsedColumns] = useState<Record<string, boolean>>({});
   const [focusedColumnId, setFocusedColumnId] = useState<string | 'all'>('all');
+  
+  // Mobile Specific State: Selected Column ID for Fullscreen View
+  const [mobileSelectedCol, setMobileSelectedCol] = useState<string | null>(null);
 
   // Define active sector based on current user for "Focus Mode"
   const activeSector = useMemo(() => {
@@ -182,7 +185,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({
                   <svg className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth="2.5"/></svg>
               </div>
 
-              {/* Quick Visibility Controls */}
+              {/* Quick Visibility Controls (Hidden on Mobile) */}
               <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-1 gap-1">
                   <button 
                     onClick={handleExpandAll} 
@@ -200,8 +203,8 @@ const KanbanView: React.FC<KanbanViewProps> = ({
                   </button>
               </div>
 
-              {/* Enhanced Focus Selector Button */}
-              <div className="relative group">
+              {/* Enhanced Focus Selector Button (Desktop Only) */}
+              <div className="hidden md:block relative group">
                   <div className={`
                       flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all cursor-pointer border
                       ${focusedColumnId !== 'all' 
@@ -231,7 +234,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({
               {focusedColumnId !== 'all' && (
                   <button 
                       onClick={() => handleFocusColumn('all')}
-                      className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-red-500 rounded-xl transition-all"
+                      className="hidden md:block p-2 bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-red-500 rounded-xl transition-all"
                       title="Limpar Filtro"
                   >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -255,9 +258,50 @@ const KanbanView: React.FC<KanbanViewProps> = ({
           </div>
       </div>
 
-      {/* Kanban Board Container - Maximize Height */}
-      <div className="flex-1 flex overflow-x-auto overflow-y-hidden px-2 pt-2 md:px-4 md:pt-4 pb-0 gap-3 md:gap-4 custom-scrollbar items-stretch bg-slate-50/50 dark:bg-slate-900/50">
+      {/* --- MOBILE SECTOR MENU (Visible when no column is selected on Mobile) --- */}
+      <div className={`md:hidden flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50 dark:bg-slate-900/50 ${mobileSelectedCol ? 'hidden' : 'block'}`}>
+          {columns.map(col => {
+              const groups = groupedData[col.id];
+              const count = groups.length;
+              const isMySector = activeSector === col.step;
+              
+              let bgClass = 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700';
+              if (isMySector) bgClass = 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800';
+
+              return (
+                  <button 
+                      key={col.id}
+                      onClick={() => setMobileSelectedCol(col.id)}
+                      className={`w-full p-6 rounded-2xl border ${bgClass} shadow-sm flex items-center justify-between transition-all active:scale-95`}
+                  >
+                      <div className="flex items-center gap-3">
+                          <div className={`w-3 h-3 rounded-full ${isMySector ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></div>
+                          <span className={`text-lg font-black uppercase ${isMySector ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                              {col.label}
+                          </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                          <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-black px-3 py-1 rounded-lg text-sm">{count}</span>
+                          <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      </div>
+                  </button>
+              );
+          })}
+      </div>
+
+      {/* Kanban Board Container */}
+      <div className={`
+          flex-1 flex overflow-x-auto overflow-y-hidden px-0 pt-0 md:px-4 md:pt-4 pb-0 gap-3 md:gap-4 custom-scrollbar items-stretch bg-slate-50/50 dark:bg-slate-900/50
+          ${mobileSelectedCol ? 'block' : 'hidden md:flex'}
+      `}>
         {columns.map((col) => {
+            // Mobile Logic: If a column is selected, only show that one. If on desktop, show all based on existing logic.
+            const isMobileVisible = mobileSelectedCol === col.id;
+            
+            // If we are in mobile view (detected by mobileSelectedCol having a value) and this isn't the selected column, render nothing.
+            // On desktop (md:flex), we override display:none with flex via the parent container or width classes below.
+            if (mobileSelectedCol && !isMobileVisible) return null;
+
             // Lógica de Permissão
             const isMySector = activeSector === col.step;
             const userIsAdmin = currentUser?.role === 'Admin' || currentUser?.departamento === 'Geral';
@@ -267,33 +311,36 @@ const KanbanView: React.FC<KanbanViewProps> = ({
             const isCollapsed = collapsedColumns[col.id];
             
             // Lógica de Largura
-            let widthClass = 'min-w-[340px] w-[380px] flex-shrink-0'; // Padrão
+            let widthClass = 'min-w-[340px] w-[380px] flex-shrink-0'; // Padrão Desktop
             if (isCollapsed) {
-                widthClass = 'w-14 min-w-[3.5rem] flex-shrink-0'; // Colapsado
+                widthClass = 'w-14 min-w-[3.5rem] flex-shrink-0'; // Colapsado Desktop
             } else if (isLocked) {
-                widthClass = 'min-w-[260px] w-[260px] flex-shrink-0'; // Bloqueado
+                widthClass = 'min-w-[260px] w-[260px] flex-shrink-0'; // Bloqueado Desktop
             }
+
+            // FULL WIDTH FOR MOBILE
+            if (mobileSelectedCol) widthClass = 'w-full min-w-full flex-shrink-0 border-none';
 
             const groups = groupedData[col.id];
             
-            // Estilo de Fundo (Ajuste para encostar na base: rounded-b-none, border-b-0, mb-0)
+            // Estilo de Fundo
             let bgClass = 'bg-slate-100/50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-800';
             if (isMySector) bgClass = 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800';
             if (isLocked) bgClass = 'bg-slate-50/50 dark:bg-black/20 border-slate-200 dark:border-slate-800 opacity-90';
 
             return (
-                <div key={col.id} className={`${widthClass} flex flex-col h-full rounded-t-2xl rounded-b-none border-x border-t border-b-0 mb-0 ${bgClass} transition-all duration-300 relative`}>
+                <div key={col.id} className={`${widthClass} flex flex-col h-full md:rounded-t-2xl md:rounded-b-none border-x border-t border-b-0 mb-0 ${bgClass} transition-all duration-300 relative`}>
                     
                     {/* Column Header */}
                     <div 
                         className={`
-                            p-3 border-b border-inherit flex justify-between items-center rounded-t-2xl transition-all shrink-0
+                            p-3 border-b border-inherit flex justify-between items-center md:rounded-t-2xl transition-all shrink-0
                             ${isMySector ? 'bg-emerald-100/50 dark:bg-emerald-900/30' : ''}
                             ${isCollapsed ? 'h-full flex-col py-4 justify-between bg-slate-200/50 dark:bg-slate-800/80 items-center' : ''}
                         `}
                     >
                         {isCollapsed ? (
-                            // Header Vertical (Colapsado)
+                            // Header Vertical (Colapsado Desktop)
                             <>
                                 <button 
                                     onClick={() => toggleColumnCollapse(col.id)}
@@ -317,7 +364,15 @@ const KanbanView: React.FC<KanbanViewProps> = ({
                         ) : (
                             // Header Horizontal (Expandido)
                             <>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-3">
+                                    {/* Mobile Back Button */}
+                                    <button 
+                                        onClick={() => setMobileSelectedCol(null)}
+                                        className="md:hidden p-2 -ml-2 text-slate-500 dark:text-slate-400 hover:bg-black/5 rounded-full"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                    </button>
+
                                     {isLocked ? (
                                         <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" strokeWidth="2.5"/></svg>
                                     ) : (
@@ -333,7 +388,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({
                                     {!isMySector && (
                                         <button 
                                             onClick={() => toggleColumnCollapse(col.id)}
-                                            className="p-1 rounded text-slate-300 hover:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                            className="hidden md:block p-1 rounded text-slate-300 hover:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                                             title="Recolher Coluna"
                                         >
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 19l-7-7 7-7m8 14l-7-7 7-7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
